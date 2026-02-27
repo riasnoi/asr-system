@@ -202,7 +202,7 @@ flowchart TD
   E --> G[Speaker attribution: stereo split или diarization]
   F --> H[Готовые реплики со speaker]
   G --> H
-  H --> I[Emotion model: 4 класса (радость/грусть/злость/нейтр.)]
+  H --> I[Emotion model: 4 класса радость/грусть/злость/нейтр.]
   I --> J[Агрегации по звонку/оператору/периоду]
   J --> K[Хранилище результатов + отчет/дашборд]
 ```
