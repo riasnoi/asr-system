@@ -20,17 +20,24 @@
 
 ## Документация
 
-### ML System Design Docs
+Документы теперь хранятся по типу артефакта:
 
-- Финальная рабочая версия: [`docs/ml-system-design-asr-callcenter-mvp-v1.md`](docs/ml-system-design-asr-callcenter-mvp-v1.md)
-- Официальная версия (для согласования/представления): [`docs/ml-system-design-asr-callcenter-mvp-v1-official.md`](docs/ml-system-design-asr-callcenter-mvp-v1-official.md)
+- Исходные Markdown-версии: [`docs/raw/`](docs/raw/)
+- Экспортированные PDF-версии: [`docs/pdf/`](docs/pdf/)
+
+Текущий основной документ:
+
+- Markdown-источник: [`docs/raw/ml-system-doc-v1.md`](docs/raw/ml-system-doc-v1.md)
+- PDF-экспорт: [`docs/pdf/ml-system-doc-v1.pdf`](docs/pdf/ml-system-doc-v1.pdf)
 
 
 ## Структура репозитория
 
 ```text
 asr-system/
-├── docs/                              # Готовые версии ML System Design Doc
+├── docs/
+│   ├── raw/                           # Исходные Markdown-документы
+│   └── pdf/                           # Экспортированные PDF-версии
 └── README.md
 ```
 
