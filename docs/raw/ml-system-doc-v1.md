@@ -1,6 +1,23 @@
-# ML System Design Doc — Умная система оценки звонков колл-центра (MVP) v1
+# ML System Design Doc — Система автоматической транскрибации, диаризации и анализа эмоциональной окраски звонков колл-центра (MVP) v1
 
-Документ составлен по шаблону ML System Design Doc (Reliable ML) и с учетом рекомендуемого workflow заполнения.
+## Паспорт документа
+
+- Статус: рабочая версия для согласования пилота (MVP)
+- Версия: `v1.0`
+- Тип документа: `ML System Design Doc`
+- Область применения: пилотный контур контроля качества звонков колл-центра
+- Основа: шаблон ML System Design Doc (Reliable ML) + проектный черновик `draft.md`
+
+## Назначение документа
+
+Документ фиксирует цели, ограничения, методологию, критерии успешности пилота и требования к MVP-системе автоматической обработки звонков колл-центра:
+
+- автоматическая расшифровка (ASR),
+- диаризация/атрибуция говорящих,
+- определение эмоциональной окраски реплик,
+- формирование аналитики и очереди приоритизации звонков для QA/супервизоров.
+
+Документ предназначен для совместной работы `Product Owner`, `Data Scientist / ML Engineer`, `QA`, `DE` и технических команд, участвующих в подготовке пилота.
 
 ---
 
@@ -60,7 +77,7 @@
 
 **Ограничения (PO):**
 
-- Персональные данные/конфиденциальность: записи разговоров могут содержать ПДн, следовательно требуется контроль доступа, шифрование, политика хранения и (возможно) маскирование чувствительных сущностей.
+- Персональные данные/конфиденциальность: записи разговоров могут содержать ПДн → требуется контроль доступа, шифрование, политика хранения и (возможно) маскирование чувствительных сущностей.
     
 - Вычислительные ресурсы: ASR на аудио — самая дорогая часть, нужен расчет/лимиты на пилоте.
     
@@ -112,7 +129,7 @@
         
     5. агрегации и выгрузка результатов.
         
-- Модель эмоций: классификация реплик в 4 эмоции из датасета Dusha: **радость/positive, грусть, злость, нейтральная** ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha?utm_source=chatgpt.com "Датасет для распознавания эмоций — Dusha")).
+- Модель эмоций: классификация реплик в 4 эмоции из датасета Dusha: **радость/positive, грусть, злость, нейтральная** ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha  "Датасет для распознавания эмоций — Dusha")).
     
 - Техническая воспроизводимость: контейнеризация, версионирование моделей и датасетов, фиксированные сплиты.
     
@@ -145,11 +162,11 @@
     
 - Для ASR рассматриваем:
     
-    - **Whisper** (семантически сегментирует на интервалы с таймкодами; формат JSON/segments широко поддержан в экосистеме) ([developers.openai.com](https://developers.openai.com/api/docs/guides/speech-to-text?utm_source=chatgpt.com "Speech to text - OpenAI API"))
+    - **Whisper** (семантически сегментирует на интервалы с таймкодами; формат JSON/segments широко поддержан в экосистеме) ([developers.openai.com](https://developers.openai.com/api/docs/guides/speech-to-text  "Speech to text - OpenAI API"))
         
-    - **VibeVoice-ASR (Microsoft)** — важное преимущество: объединяет ASR + diarization + timestamps в одной генерации (“Who/When/What”), рассчитан на long-form до ~60 минут ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR?utm_source=chatgpt.com "microsoft/VibeVoice-ASR · Hugging Face"))
+    - **VibeVoice-ASR (Microsoft)** — важное преимущество: объединяет ASR + diarization + timestamps в одной генерации (“Who/When/What”), рассчитан на long-form до ~60 минут ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR  "microsoft/VibeVoice-ASR · Hugging Face"))
         
-- Эмоции: стартуем с 4-классовой схемы Dusha ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha?utm_source=chatgpt.com "Датасет для распознавания эмоций — Dusha")), далее при необходимости расширяем (интенсивность/больше классов/доменные эмоции).
+- Эмоции: стартуем с 4-классовой схемы Dusha ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha  "Датасет для распознавания эмоций — Dusha")), далее при необходимости расширяем (интенсивность/больше классов/доменные эмоции).
     
 
 ---
@@ -190,7 +207,7 @@ flowchart TD
   J --> K[Хранилище результатов + отчет/дашборд]
 ```
 
-Опора на возможности VibeVoice-ASR (структурная расшифровка с говорящими и таймкодами) снижает сложность отдельного diarization-шага ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR?utm_source=chatgpt.com "microsoft/VibeVoice-ASR · Hugging Face")).
+Опора на возможности VibeVoice-ASR (структурная расшифровка с говорящими и таймкодами) снижает сложность отдельного diarization-шага ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR  "microsoft/VibeVoice-ASR · Hugging Face")).
 
 ---
 
@@ -203,7 +220,7 @@ flowchart TD
 |Архив аудиозаписей звонков|Да (файловое хранилище, ежедневные папки)|DE/DS/IT|Нет, требуется аудит форматов/битрейта/канальности на Этапе 1|
 |Метаданные звонка (call_id, дата, оператор, длительность, направление и т.п.)|Ожидается, что есть в операционной системе колл-центра (DB/CSV-экспорт); конкретный источник фиксируется на kickoff|DE/DS/PO|Нет, источник и качество подтверждаются на Этапе 1|
 |Ручные оценки QA (если есть)|Частично: возможны в QA-системе/таблицах; если отсутствуют, собираем пилотную разметку вручную|PO/QA/DE|Нет, наличие и структура проверяются на Этапе 1|
-|Внешний датасет эмоций Dusha|Да (open dataset) ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha?utm_source=chatgpt.com "Датасет для распознавания эмоций — Dusha"))|DS|n/a|
+|Внешний датасет эмоций Dusha|Да (open dataset) ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha  "Датасет для распознавания эмоций — Dusha"))|DS|n/a|
 |Разметка эмоций на части реальных звонков (для доменной валидации)|Будет создана в пилоте|PO/QA/DS|n/a|
 
 **Выход этапа:**
@@ -236,12 +253,12 @@ flowchart TD
         
     - наличии speaker diarization “из коробки”.
         
-- VibeVoice-ASR заявляет “Who/When/What” и diarization в едином выводе ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR?utm_source=chatgpt.com "microsoft/VibeVoice-ASR · Hugging Face")) — это может существенно ускорить MVP.
+- VibeVoice-ASR заявляет “Who/When/What” и diarization в едином выводе ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR  "microsoft/VibeVoice-ASR · Hugging Face")) — это может существенно ускорить MVP.
     
 
 **Риски/план:**
 
-- Доменные термины/имена → использовать “hotwords/контекст” там, где поддерживается (VibeVoice) ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR?utm_source=chatgpt.com "microsoft/VibeVoice-ASR · Hugging Face")).
+- Доменные термины/имена → использовать “hotwords/контекст” там, где поддерживается (VibeVoice) ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR  "microsoft/VibeVoice-ASR · Hugging Face")).
     
 - Низкое качество аудио/шумы → VAD, нормализация, (опционально) шумоподавление.
     
@@ -259,7 +276,7 @@ flowchart TD
 
 **MVP:**
 
-- Приоритет: VibeVoice-ASR, т.к. diarization встроен ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR?utm_source=chatgpt.com "microsoft/VibeVoice-ASR · Hugging Face")).
+- Приоритет: VibeVoice-ASR, т.к. diarization встроен ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR  "microsoft/VibeVoice-ASR · Hugging Face")).
     
 - Маппинг Speaker0/Speaker1 → “оператор/клиент”:
     
@@ -274,7 +291,7 @@ flowchart TD
 
 **Целевая переменная:**
 
-- Emotion ∈ {радость/positive, грусть, злость, нейтральная} по аналогии с Dusha ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha?utm_source=chatgpt.com "Датасет для распознавания эмоций — Dusha")).
+- Emotion ∈ {радость/positive, грусть, злость, нейтральная} по аналогии с Dusha ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha  "Датасет для распознавания эмоций — Dusha")).
     
 
 **Baseline:**
@@ -286,7 +303,7 @@ flowchart TD
 
 **MVP:**
 
-- Fine-tuning текстового классификатора (RuBERT-подобный) на транскриптах Dusha (4 класса) ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha?utm_source=chatgpt.com "Датасет для распознавания эмоций — Dusha")).
+- Fine-tuning текстового классификатора (RuBERT-подобный) на транскриптах Dusha (4 класса) ([developers.sber.ru](https://developers.sber.ru/portal/products/dusha  "Датасет для распознавания эмоций — Dusha")).
     
 - Затем **доменная адаптация**: дообучение/калибровка на небольшой ручной разметке реплик из реальных звонков (пилотный датасет).
     
@@ -456,7 +473,7 @@ flowchart TD
 
 ### 3.3. Подготовка пилота (ресурсы/ограничения)
 
-- Основные затраты: ASR. VibeVoice-ASR рассчитан на long-form и дает структурный вывод (speaker/timestamps) ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR?utm_source=chatgpt.com "microsoft/VibeVoice-ASR · Hugging Face")), потенциально уменьшая число отдельных сервисов.
+- Основные затраты: ASR. VibeVoice-ASR рассчитан на long-form и дает структурный вывод (speaker/timestamps) ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR  "microsoft/VibeVoice-ASR · Hugging Face")), потенциально уменьшая число отдельных сервисов.
     
 - На baseline-эксперименте:
     
@@ -569,8 +586,8 @@ flowchart TD
 
 - **Качество diarization**: ошибки “кто говорит” ухудшат интерпретацию эмоций (клиент vs оператор).
     
-- **Domain shift**: эмоции в Dusha (вирт. ассистент/подкасты) могут отличаться от колл-центра ([arxiv.org](https://arxiv.org/abs/2212.12266?utm_source=chatgpt.com "Large Raw Emotional Dataset with Aggregation Mechanism")) → нужен доменный датасет/калибровка.
+- **Domain shift**: эмоции в Dusha (вирт. ассистент/подкасты) могут отличаться от колл-центра ([arxiv.org](https://arxiv.org/abs/2212.12266 "Large Raw Emotional Dataset with Aggregation Mechanism")) → нужен доменный датасет/калибровка.
     
 - **Юридические ограничения**: хранение транскриптов может требовать отдельного согласования.
     
-- **Шум/акценты/код-свитч**: может снизить качество ASR → hotwords/контекст и аудио-препроцессинг ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR?utm_source=chatgpt.com "microsoft/VibeVoice-ASR · Hugging Face")).
+- **Шум/акценты/код-свитч**: может снизить качество ASR → hotwords/контекст и аудио-препроцессинг ([huggingface.co](https://huggingface.co/microsoft/VibeVoice-ASR "microsoft/VibeVoice-ASR · Hugging Face")).
