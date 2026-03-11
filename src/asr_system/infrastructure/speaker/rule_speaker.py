@@ -1,9 +1,11 @@
+from typing import Sequence
+
 from asr_system.domain.ports import SpeakerAttributionPort
 
 
 class AlternatingSpeakerAttribution(SpeakerAttributionPort):
     def assign_speakers(
-        self, segments: list[tuple[float, float, str]]
+        self, segments: Sequence[tuple[float, float, str]]
     ) -> list[tuple[float, float, str, str]]:
         result: list[tuple[float, float, str, str]] = []
         speakers = ["operator", "client"]

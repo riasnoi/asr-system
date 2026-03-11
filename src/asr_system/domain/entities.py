@@ -14,7 +14,7 @@ class Utterance:
     emotion: Emotion
     confidence: float
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         data = asdict(self)
         data["emotion"] = self.emotion.value
         return data
@@ -27,7 +27,7 @@ class CallScore:
     negative_index_operator: float
     updated_at: datetime
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         data = asdict(self)
         data["updated_at"] = self.updated_at.isoformat()
         return data

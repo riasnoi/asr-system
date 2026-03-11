@@ -1,0 +1,20 @@
+[MASTER]
+ignore=.venv,docs,tests
+
+[MESSAGES CONTROL]
+disable=
+    C0114,
+    C0115,
+    C0116,
+    C0413,
+    E1111,
+    E1133,
+    R0903,
+    R0801
+
+[FORMAT]
+max-line-length=100
+
+[REPORTS]
+score=yes
+fail-under=7.5

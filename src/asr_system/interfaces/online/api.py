@@ -18,17 +18,17 @@ app = FastAPI(title="ASR Online Service", version="0.1.0")
 
 
 @app.get("/health")
-def health() -> dict:
+def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @app.get("/calls")
-def calls(min_negative_index: float = Query(default=0.0, ge=0.0, le=1.0)) -> dict:
+def calls(min_negative_index: float = Query(default=0.0, ge=0.0, le=1.0)) -> dict[str, object]:
     return {"items": list_calls.execute(min_negative_index=min_negative_index)}
 
 
 @app.get("/calls/{call_id}")
-def call_card(call_id: str) -> dict:
+def call_card(call_id: str) -> dict[str, object]:
     payload = get_call_card.execute(call_id)
     if payload["score"] is None and not payload["utterances"]:
         raise HTTPException(status_code=404, detail="call not found")

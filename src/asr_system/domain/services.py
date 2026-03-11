@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import UTC, datetime
 
 from .entities import CallScore, Utterance
 from .value_objects import Emotion
@@ -19,8 +20,6 @@ def build_call_score(call_id: str, utterances: list[Utterance]) -> CallScore:
         if total == 0:
             return 0.0
         return negatives[speaker] / total
-
-    from datetime import datetime, UTC
 
     return CallScore(
         call_id=call_id,

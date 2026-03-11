@@ -23,7 +23,9 @@ class StubSpeaker:
     def assign_speakers(
         self, segments: list[tuple[float, float, str]]
     ) -> list[tuple[float, float, str, str]]:
-        return [(a, b, c, "client" if i % 2 else "operator") for i, (a, b, c) in enumerate(segments)]
+        return [
+            (a, b, c, "client" if i % 2 else "operator") for i, (a, b, c) in enumerate(segments)
+        ]
 
 
 class StubEmotion:

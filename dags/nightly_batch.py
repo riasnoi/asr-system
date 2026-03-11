@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
-
 default_args = {
     "owner": "ml-platform",
     "depends_on_past": False,

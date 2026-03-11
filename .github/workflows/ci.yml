@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: Black
+        run: uv run black --check .
+
+      - name: Isort
+        run: uv run isort --check-only .
+
+      - name: Flake8
+        run: uv run flake8 src tests services
+
+      - name: Pylint
+        run: uv run pylint src/asr_system services/batch/main.py services/online/main.py
+
+      - name: Mypy
+        run: uv run mypy src
+
+      - name: Unit tests with coverage
+        run: uv run pytest
+
+      - name: Smoke test online API
+        env:
+          ONLINE_API_HOST: 127.0.0.1
+          ONLINE_API_PORT: 8080
+        run: |
+          PYTHONPATH=src uv run python services/online/main.py &
+          API_PID=$!
+          sleep 3
+          curl -fsS http://127.0.0.1:8080/health
+          curl -fsS http://127.0.0.1:8080/calls
+          kill ${API_PID}
+
+      - name: Build batch image
+        run: docker build -f Dockerfile.batch -t asr-batch:ci .
+
+      - name: Build online image
+        run: docker build -f Dockerfile.online -t asr-online:ci .

@@ -12,9 +12,7 @@ def test_json_repositories_save_and_read(tmp_path) -> None:
     utter_repo = JsonUtteranceRepository(str(tmp_path))
     score_repo = JsonCallScoreRepository(str(tmp_path))
 
-    utter_repo.save_many(
-        [Utterance("call-7", "client", 0, 1, "hi", Emotion.NEUTRAL, 0.5)]
-    )
+    utter_repo.save_many([Utterance("call-7", "client", 0, 1, "hi", Emotion.NEUTRAL, 0.5)])
     score_repo.save(
         CallScore(
             call_id="call-7",

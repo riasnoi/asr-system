@@ -14,6 +14,10 @@ class LocalFsIngest(IngestPort):
             return []
 
         files = sorted(
-            [p for p in day_folder.iterdir() if p.is_file() and p.suffix.lower() in {".wav", ".mp3", ".flac"}]
+            [
+                p
+                for p in day_folder.iterdir()
+                if p.is_file() and p.suffix.lower() in {".wav", ".mp3", ".flac"}
+            ]
         )
         return [str(path) for path in files]
