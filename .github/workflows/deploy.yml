@@ -1,0 +1,48 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      online_image_tag:
+        description: "Online image tag to deploy"
+        required: true
+        default: "latest"
+      batch_image_tag:
+        description: "Batch image tag to deploy"
+        required: true
+        default: "latest"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload deploy scripts and compose
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "deploy/production/docker-compose.yml,scripts/deploy/deploy_remote.sh"
+          target: ${{ secrets.REMOTE_APP_DIR }}
+          strip_components: 0
+
+      - name: Execute push deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          REMOTE_APP_DIR: ${{ secrets.REMOTE_APP_DIR }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          ASR_ONLINE_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-online:${{ inputs.online_image_tag }}
+          ASR_BATCH_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-batch:${{ inputs.batch_image_tag }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: REMOTE_APP_DIR,GHCR_USERNAME,GHCR_TOKEN,ASR_ONLINE_IMAGE,ASR_BATCH_IMAGE
+          script: |
+            chmod +x ${REMOTE_APP_DIR}/scripts/deploy/deploy_remote.sh
+            ${REMOTE_APP_DIR}/scripts/deploy/deploy_remote.sh
