@@ -13,6 +13,6 @@ class GetCallCardUseCase:
         score = self.scores_repo.get(call_id)
         return {
             "call_id": call_id,
-            "utterances": [u.__dict__ for u in utterances],
-            "score": score.__dict__ if score else None,
+            "utterances": [u.to_dict() for u in utterances],
+            "score": score.to_dict() if score else None,
         }

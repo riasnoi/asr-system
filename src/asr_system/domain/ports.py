@@ -41,3 +41,6 @@ class CallScoreRepositoryPort(Protocol):
 
     def get(self, call_id: str) -> CallScore | None:
         ...
+
+    def list_all(self) -> Sequence[CallScore]:
+        ...

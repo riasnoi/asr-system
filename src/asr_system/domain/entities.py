@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 
 from .value_objects import Emotion
@@ -14,6 +14,11 @@ class Utterance:
     emotion: Emotion
     confidence: float
 
+    def to_dict(self) -> dict:
+        data = asdict(self)
+        data["emotion"] = self.emotion.value
+        return data
+
 
 @dataclass(frozen=True)
 class CallScore:
@@ -21,3 +26,8 @@ class CallScore:
     negative_index_client: float
     negative_index_operator: float
     updated_at: datetime
+
+    def to_dict(self) -> dict:
+        data = asdict(self)
+        data["updated_at"] = self.updated_at.isoformat()
+        return data
