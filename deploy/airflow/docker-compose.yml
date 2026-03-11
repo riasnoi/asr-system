@@ -1,0 +1,54 @@
+services:
+  airflow-db:
+    image: postgres:16
+    container_name: airflow-db
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_db_data:/var/lib/postgresql/data
+
+  airflow-webserver:
+    image: apache/airflow:2.10.3
+    container_name: airflow-webserver
+    depends_on:
+      - airflow-db
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+      AIRFLOW__WEBSERVER__RBAC: "True"
+    volumes:
+      - ../../dags:/opt/airflow/dags
+      - ../../scripts:/opt/asr/scripts
+      - ../../src:/opt/asr/src
+      - ../../services:/opt/asr/services
+      - ../../data:/opt/asr/data
+      - ../../pyproject.toml:/opt/asr/pyproject.toml
+      - ../../uv.lock:/opt/asr/uv.lock
+    ports:
+      - "8081:8080"
+    command: webserver
+
+  airflow-scheduler:
+    image: apache/airflow:2.10.3
+    container_name: airflow-scheduler
+    depends_on:
+      - airflow-db
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+    volumes:
+      - ../../dags:/opt/airflow/dags
+      - ../../scripts:/opt/asr/scripts
+      - ../../src:/opt/asr/src
+      - ../../services:/opt/asr/services
+      - ../../data:/opt/asr/data
+      - ../../pyproject.toml:/opt/asr/pyproject.toml
+      - ../../uv.lock:/opt/asr/uv.lock
+    command: scheduler
+
+volumes:
+  airflow_db_data:
