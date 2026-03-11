@@ -80,3 +80,4 @@ asr-system/
 
 - Основной ML-документ: `docs/raw/ml-system-doc-v1.md`
 - PDF-версия: `docs/pdf/ml-system-doc-v1.pdf`
+- Политика env/secrets: `docs/raw/secrets-management.md`

@@ -18,8 +18,8 @@ class AppSettings(BaseEnvSettings):
 
 
 class StorageSettings(BaseEnvSettings):
-    input_dir: str = Field(default="./data/input", alias="STORAGE_INPUT_DIR")
-    output_dir: str = Field(default="./data/output", alias="STORAGE_OUTPUT_DIR")
+    input_dir: str = Field(default="./data/input", alias="BATCH_INPUT_DIR")
+    output_dir: str = Field(default="./data/output", alias="BATCH_OUTPUT_DIR")
 
 
 class DatabaseSettings(BaseEnvSettings):
@@ -27,23 +27,32 @@ class DatabaseSettings(BaseEnvSettings):
 
 
 class AsrSettings(BaseEnvSettings):
-    provider: str = Field(default="whisper", alias="ASR_PROVIDER")
-    model_name: str = Field(default="whisper-large-v3-turbo", alias="ASR_MODEL")
+    provider: str = Field(default="whisper", alias="BATCH_ASR_PROVIDER")
+    model_name: str = Field(default="whisper-large-v3-turbo", alias="BATCH_ASR_MODEL")
 
 
 class EmotionSettings(BaseEnvSettings):
-    provider: str = Field(default="rubert", alias="EMOTION_PROVIDER")
-    model_name: str = Field(default="cointegrated/rubert-tiny2", alias="EMOTION_MODEL")
+    provider: str = Field(default="rubert", alias="BATCH_EMOTION_PROVIDER")
+    model_name: str = Field(default="cointegrated/rubert-tiny2", alias="BATCH_EMOTION_MODEL")
 
 
 class AirflowSettings(BaseEnvSettings):
-    schedule: str = Field(default="0 0 * * *", alias="AIRFLOW_SCHEDULE")
-    sla_hour_msk: int = Field(default=8, alias="AIRFLOW_SLA_HOUR_MSK")
+    schedule: str = Field(default="0 0 * * *", alias="BATCH_AIRFLOW_SCHEDULE")
+    sla_hour_msk: int = Field(default=8, alias="BATCH_AIRFLOW_SLA_HOUR_MSK")
 
 
 class ApiSettings(BaseEnvSettings):
     host: str = Field(default="0.0.0.0", alias="ONLINE_API_HOST")
     port: int = Field(default=8080, alias="ONLINE_API_PORT")
+
+
+class BatchSecretsSettings(BaseEnvSettings):
+    storage_access_key: str = Field(default="", alias="BATCH_STORAGE_ACCESS_KEY")
+    storage_secret_key: str = Field(default="", alias="BATCH_STORAGE_SECRET_KEY")
+
+
+class OnlineSecretsSettings(BaseEnvSettings):
+    api_token: str = Field(default="", alias="ONLINE_API_TOKEN")
 
 
 class Settings(BaseSettings):
@@ -54,6 +63,8 @@ class Settings(BaseSettings):
     emotion: EmotionSettings
     airflow: AirflowSettings
     api: ApiSettings
+    batch_secrets: BatchSecretsSettings
+    online_secrets: OnlineSecretsSettings
 
 
 @lru_cache(maxsize=1)
@@ -66,4 +77,6 @@ def get_settings() -> Settings:
         emotion=EmotionSettings(),
         airflow=AirflowSettings(),
         api=ApiSettings(),
+        batch_secrets=BatchSecretsSettings(),
+        online_secrets=OnlineSecretsSettings(),
     )
