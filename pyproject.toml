@@ -1,0 +1,59 @@
+[project]
+name = "asr-system"
+version = "0.1.0"
+description = "Batch and online services for call-center ASR QA"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi==0.115.12",
+  "pydantic==2.11.2",
+  "pydantic-settings==2.8.1",
+  "uvicorn==0.34.0",
+]
+
+[dependency-groups]
+dev = [
+  "black==25.1.0",
+  "flake8==7.1.1",
+  "isort==5.13.2",
+  "mypy==1.15.0",
+  "pylint==3.3.5",
+  "pytest==8.3.5",
+  "pytest-cov==6.0.0",
+  "pytest-mock==3.14.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.8.2", "wheel>=0.45.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+src_paths = ["src", "tests", "services"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+mypy_path = "src"
+
+[tool.pylint.main]
+py-version = "3.12"
+ignore-paths = ["^docs/", "^tests/"]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-q --cov=asr_system.domain --cov=asr_system.application --cov=asr_system.infrastructure --cov-fail-under=80"
