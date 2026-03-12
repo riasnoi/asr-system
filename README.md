@@ -33,8 +33,8 @@ asr-system/
 │   ├── interfaces/
 │   └── config.py
 ├── tests/
-├── pyproject.toml          # будет добавлен в шаге зависимостей
-├── uv.lock                 # будет добавлен в шаге зависимостей
+├── pyproject.toml          
+├── uv.lock                 
 └── README.md
 ```
 
