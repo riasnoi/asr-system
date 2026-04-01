@@ -71,10 +71,12 @@ class TestRuleBasedEmotionAdapter:
 class TestJsonUtteranceRepositoryIdempotency:
     def test_delete_by_call_id_removes_only_target(self, tmp_path: Path) -> None:
         repo = JsonUtteranceRepository(str(tmp_path))
-        repo.save_many([
-            Utterance("c1", "client", 0, 1, "hi", Emotion.NEUTRAL, 0.8),
-            Utterance("c2", "client", 0, 1, "bye", Emotion.NEUTRAL, 0.7),
-        ])
+        repo.save_many(
+            [
+                Utterance("c1", "client", 0, 1, "hi", Emotion.NEUTRAL, 0.8),
+                Utterance("c2", "client", 0, 1, "bye", Emotion.NEUTRAL, 0.7),
+            ]
+        )
 
         repo.delete_by_call_id("c1")
 

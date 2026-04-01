@@ -100,9 +100,7 @@ def test_unsupported_auth_method_raises(mock_client_cls: MagicMock) -> None:
 
 
 @patch("asr_system.infrastructure.secrets.vault_provider.hvac.Client")
-def test_get_secret_reads_kv_v2(
-    mock_client_cls: MagicMock, vault_settings: VaultSettings
-) -> None:
+def test_get_secret_reads_kv_v2(mock_client_cls: MagicMock, vault_settings: VaultSettings) -> None:
     mock_client = MagicMock()
     mock_client_cls.return_value = mock_client
     mock_client.auth.approle.login.return_value = {"auth": {"client_token": "s.tok"}}
