@@ -19,7 +19,7 @@ from airflow.operators.python import PythonOperator
 NAMESPACE = "asr-system"
 # Replaced at deploy time by k8s_deploy.sh (same sed pass as other images).
 BATCH_IMAGE = "asr-batch:placeholder"
-JOB_POLL_INTERVAL = 30   # seconds between status checks
+JOB_POLL_INTERVAL = 30  # seconds between status checks
 JOB_TIMEOUT = 6 * 3600  # 6 h hard limit
 
 default_args = {
@@ -33,6 +33,7 @@ default_args = {
 # ---------------------------------------------------------------------------
 # Task functions
 # ---------------------------------------------------------------------------
+
 
 def _validate_input(ds: str, **_):
     """Sanity-check that the execution date is reasonable."""
@@ -65,18 +66,14 @@ def _trigger_batch_job(ds: str, ds_nodash: str, ti, **_):
             template=client.V1PodTemplateSpec(
                 spec=client.V1PodSpec(
                     restart_policy="OnFailure",
-                    image_pull_secrets=[
-                        client.V1LocalObjectReference(name="ghcr-pull-secret")
-                    ],
+                    image_pull_secrets=[client.V1LocalObjectReference(name="ghcr-pull-secret")],
                     containers=[
                         client.V1Container(
                             name="batch",
                             image=BATCH_IMAGE,
                             env_from=[
                                 client.V1EnvFromSource(
-                                    config_map_ref=client.V1ConfigMapEnvSource(
-                                        name="asr-config"
-                                    )
+                                    config_map_ref=client.V1ConfigMapEnvSource(name="asr-config")
                                 ),
                                 client.V1EnvFromSource(
                                     secret_ref=client.V1SecretEnvSource(
@@ -85,9 +82,7 @@ def _trigger_batch_job(ds: str, ds_nodash: str, ti, **_):
                                 ),
                             ],
                             volume_mounts=[
-                                client.V1VolumeMount(
-                                    name="data", mount_path="/app/data"
-                                )
+                                client.V1VolumeMount(name="data", mount_path="/app/data")
                             ],
                         )
                     ],
@@ -128,9 +123,7 @@ def _wait_for_completion(ti, **_):
             return
 
         if status.failed and status.failed > 2:
-            raise RuntimeError(
-                f"Job '{job_name}' failed {status.failed} times — aborting"
-            )
+            raise RuntimeError(f"Job '{job_name}' failed {status.failed} times — aborting")
 
         active = status.active or 0
         failed = status.failed or 0

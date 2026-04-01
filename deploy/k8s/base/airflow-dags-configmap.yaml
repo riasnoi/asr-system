@@ -65,9 +65,7 @@ data:
                 template=client.V1PodTemplateSpec(
                     spec=client.V1PodSpec(
                         restart_policy="OnFailure",
-                        image_pull_secrets=[
-                            client.V1LocalObjectReference(name="ghcr-pull-secret")
-                        ],
+                        image_pull_secrets=[client.V1LocalObjectReference(name="ghcr-pull-secret")],
                         containers=[
                             client.V1Container(
                                 name="batch",
