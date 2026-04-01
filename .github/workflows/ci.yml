@@ -80,8 +80,11 @@ jobs:
         run: |
           PYTHONPATH=src uv run python services/online/main.py &
           API_PID=$!
-          sleep 3
-          curl -fsS http://127.0.0.1:8080/health
+          for i in $(seq 1 20); do
+            curl -fsS http://127.0.0.1:8080/health && break
+            echo "Waiting for API... attempt $i"
+            sleep 1
+          done
           curl -fsS http://127.0.0.1:8080/calls
           kill ${API_PID}
 
