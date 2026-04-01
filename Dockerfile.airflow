@@ -1,4 +1,5 @@
 FROM apache/airflow:2.10.3
 
-RUN pip install --no-cache-dir \
-    "apache-airflow-providers-cncf-kubernetes>=8.0.0"
+# The DAG uses only PythonOperator + the kubernetes Python client,
+# which is already bundled with the base Airflow image.
+# This file pins the exact version used in production.
