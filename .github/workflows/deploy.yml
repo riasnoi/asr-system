@@ -1,48 +1,80 @@
-name: Deploy
+name: Deploy to Kubernetes
 
 on:
+  workflow_run:
+    workflows: ["Release Images"]
+    types: [completed]
+    branches: [main]
+
   workflow_dispatch:
     inputs:
       online_image_tag:
-        description: "Online image tag to deploy"
+        description: "Online image tag (sha-xxxx or v1.0.0)"
         required: true
         default: "latest"
       batch_image_tag:
-        description: "Batch image tag to deploy"
+        description: "Batch image tag (sha-xxxx or v1.0.0)"
         required: true
         default: "latest"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Upload deploy scripts and compose
+      - name: Resolve image tags
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "online=${{ inputs.online_image_tag }}" >> "$GITHUB_OUTPUT"
+            echo "batch=${{ inputs.batch_image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+            echo "online=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "batch=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch GHCR credentials from Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: approle
+          roleId: ${{ secrets.VAULT_ROLE_ID }}
+          secretId: ${{ secrets.VAULT_SECRET_ID }}
+          secrets: |
+            secret/data/asr-system/registry GHCR_USERNAME | GHCR_USERNAME ;
+            secret/data/asr-system/registry GHCR_TOKEN | GHCR_TOKEN
+
+      - name: Upload K8s manifests and deploy script
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "deploy/production/docker-compose.yml,scripts/deploy/deploy_remote.sh"
+          source: "deploy/k8s,scripts/deploy/k8s_deploy.sh"
           target: ${{ secrets.REMOTE_APP_DIR }}
           strip_components: 0
+          overwrite: true
 
-      - name: Execute push deploy over SSH
+      - name: Deploy to K8s cluster
         uses: appleboy/ssh-action@v1.2.0
         env:
           REMOTE_APP_DIR: ${{ secrets.REMOTE_APP_DIR }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          ASR_ONLINE_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-online:${{ inputs.online_image_tag }}
-          ASR_BATCH_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-batch:${{ inputs.batch_image_tag }}
+          GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ env.GHCR_TOKEN }}
+          ONLINE_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-online:${{ steps.tags.outputs.online }}
+          BATCH_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-batch:${{ steps.tags.outputs.batch }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: REMOTE_APP_DIR,GHCR_USERNAME,GHCR_TOKEN,ASR_ONLINE_IMAGE,ASR_BATCH_IMAGE
+          envs: REMOTE_APP_DIR,GHCR_USERNAME,GHCR_TOKEN,ONLINE_IMAGE,BATCH_IMAGE
           script: |
-            chmod +x ${REMOTE_APP_DIR}/scripts/deploy/deploy_remote.sh
-            ${REMOTE_APP_DIR}/scripts/deploy/deploy_remote.sh
+            chmod +x ${REMOTE_APP_DIR}/scripts/deploy/k8s_deploy.sh
+            ${REMOTE_APP_DIR}/scripts/deploy/k8s_deploy.sh

@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: asr-batch-nightly
+  namespace: asr-system
+spec:
+  schedule: "0 0 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 25200  # 7 hours
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: asr-batch
+        spec:
+          restartPolicy: OnFailure
+          imagePullSecrets:
+            - name: ghcr-pull-secret
+          containers:
+            - name: batch
+              image: asr-batch:placeholder
+              envFrom:
+                - configMapRef:
+                    name: asr-config
+                - secretRef:
+                    name: asr-vault-credentials
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+                limits:
+                  cpu: "2"
+                  memory: 4Gi
+              volumeMounts:
+                - name: data
+                  mountPath: /app/data
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: asr-data-pvc

@@ -1,7 +1,12 @@
+from __future__ import annotations
+
+import logging
 from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class BaseEnvSettings(BaseSettings):
@@ -67,16 +72,37 @@ class Settings(BaseSettings):
     online_secrets: OnlineSecretsSettings
 
 
+def _apply_vault_overrides() -> dict[str, dict[str, str]]:
+    """Load secrets from Vault if VAULT_ENABLED=true, otherwise return empty."""
+    from asr_system.infrastructure.secrets.vault_provider import VaultSettings
+
+    vault_cfg = VaultSettings()
+    if not vault_cfg.enabled:
+        return {}
+
+    from asr_system.infrastructure.secrets.vault_provider import VaultSecretsProvider
+
+    logger.info("Vault enabled, loading secrets from %s", vault_cfg.addr)
+    provider = VaultSecretsProvider(vault_cfg)
+    return provider.load_all()
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    overrides = _apply_vault_overrides()
+
+    batch_secret_kw = overrides.get("batch", {})
+    online_secret_kw = overrides.get("online", {})
+    db_kw = overrides.get("app", {})
+
     return Settings(
         app=AppSettings(),
         storage=StorageSettings(),
-        db=DatabaseSettings(),
+        db=DatabaseSettings(**db_kw),
         asr=AsrSettings(),
         emotion=EmotionSettings(),
         airflow=AirflowSettings(),
         api=ApiSettings(),
-        batch_secrets=BatchSecretsSettings(),
-        online_secrets=OnlineSecretsSettings(),
+        batch_secrets=BatchSecretsSettings(**batch_secret_kw),
+        online_secrets=OnlineSecretsSettings(**online_secret_kw),
     )

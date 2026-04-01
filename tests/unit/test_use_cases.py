@@ -42,6 +42,9 @@ class MemoryUtterancesRepo:
     def save_many(self, utterances: list[Utterance]) -> None:
         self.items.extend(utterances)
 
+    def delete_by_call_id(self, call_id: str) -> None:
+        self.items = [i for i in self.items if i.call_id != call_id]
+
     def get_by_call_id(self, call_id: str) -> list[Utterance]:
         return [i for i in self.items if i.call_id == call_id]
 

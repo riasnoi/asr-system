@@ -5,6 +5,8 @@ description = "Batch and online services for call-center ASR QA"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "fastapi==0.115.12",
+  "hvac>=2.3.0",
+  "prometheus-fastapi-instrumentator>=7.0.0",
   "pydantic==2.11.2",
   "pydantic-settings==2.8.1",
   "uvicorn==0.34.0",

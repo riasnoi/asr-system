@@ -19,6 +19,19 @@ class JsonUtteranceRepository(UtteranceRepositoryPort):
             for item in utterances:
                 file.write(json.dumps(item.to_dict(), ensure_ascii=False) + "\n")
 
+    def delete_by_call_id(self, call_id: str) -> None:
+        """Remove all utterances for a given call_id (for idempotent re-processing)."""
+        if not self.path.exists():
+            return
+        kept: list[str] = []
+        with self.path.open("r", encoding="utf-8") as file:
+            for line in file:
+                raw = json.loads(line)
+                if raw["call_id"] != call_id:
+                    kept.append(line)
+        with self.path.open("w", encoding="utf-8") as file:
+            file.writelines(kept)
+
     def get_by_call_id(self, call_id: str) -> list[Utterance]:
         if not self.path.exists():
             return []

@@ -6,8 +6,24 @@ set -euo pipefail
 : "${ASR_BATCH_IMAGE:?ASR_BATCH_IMAGE is required}"
 : "${GHCR_USERNAME:?GHCR_USERNAME is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
+: "${VAULT_ADDR:?VAULT_ADDR is required}"
+: "${VAULT_ROLE_ID:?VAULT_ROLE_ID is required}"
+: "${VAULT_SECRET_ID:?VAULT_SECRET_ID is required}"
 
 cd "${REMOTE_APP_DIR}"
+
+# Generate .env with Vault bootstrap credentials (no application secrets on disk).
+cat > .env <<EOF
+APP_ENV=prod
+VAULT_ENABLED=true
+VAULT_ADDR=${VAULT_ADDR}
+VAULT_AUTH_METHOD=approle
+VAULT_ROLE_ID=${VAULT_ROLE_ID}
+VAULT_SECRET_ID=${VAULT_SECRET_ID}
+VAULT_MOUNT_POINT=secret
+VAULT_BASE_PATH=asr-system
+EOF
+chmod 600 .env
 
 echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 

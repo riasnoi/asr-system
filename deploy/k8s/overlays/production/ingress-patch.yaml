@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: asr-online
+  namespace: asr-system
+spec:
+  rules:
+    - host: asr.your-domain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: asr-online
+                port:
+                  number: 80

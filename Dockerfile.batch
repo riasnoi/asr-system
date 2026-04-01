@@ -21,3 +21,4 @@ USER appuser
 ENV PATH="/app/.venv/bin:${PATH}"
 
 CMD ["python", "services/batch/main.py"]
+# Batch is a one-shot job; HEALTHCHECK is not applicable.

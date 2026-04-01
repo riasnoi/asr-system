@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${REMOTE_APP_DIR:?REMOTE_APP_DIR is required}"
-: "${ASR_ONLINE_IMAGE:?ASR_ONLINE_IMAGE is required}"
+export KUBECONFIG="${HOME}/.kube/config"
 
-cd "${REMOTE_APP_DIR}"
+NAMESPACE="asr-system"
 
-docker compose -f deploy/production/docker-compose.yml up -d online
+echo "==> Rolling back online deployment to previous revision"
+kubectl -n "${NAMESPACE}" rollout undo deployment/asr-online
 
-curl -fsS http://127.0.0.1:8080/health >/dev/null
+echo "==> Waiting for rollout"
+kubectl -n "${NAMESPACE}" rollout status deployment/asr-online --timeout=120s
 
-echo "Rollback completed"
+echo "==> Current pod status"
+kubectl -n "${NAMESPACE}" get pods -l app=asr-online
+
+echo "==> Current image"
+kubectl -n "${NAMESPACE}" get deployment asr-online -o jsonpath='{.spec.template.spec.containers[0].image}'
+echo
+
+echo "==> Rollback completed"

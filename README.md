@@ -76,6 +76,16 @@ asr-system/
 - Модельные адаптеры в текущем состоянии содержат stub-реализации, которые заменяются на production-интеграции.
 - Для пилота приоритет: стабильный nightly workflow и релевантный top проблемных звонков.
 
+## Secrets и Vault
+
+Проект поддерживает два режима работы с секретами:
+
+- **Локальная разработка** (`VAULT_ENABLED=false`): секреты читаются из `.env`.
+- **Production** (`VAULT_ENABLED=true`): секреты загружаются из HashiCorp Vault (KV v2) при старте приложения.
+
+Bootstrap Vault-credentials доставляются на сервер автоматически через CI/CD (deploy workflow).
+Подробности: `docs/raw/secrets-management.md`.
+
 ## Документация
 
 - Основной ML-документ: `docs/raw/ml-system-doc-v1.md`

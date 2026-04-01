@@ -1,15 +1,13 @@
-import sys
 from datetime import date
-from pathlib import Path
 
-# Allows local execution without editable install.
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_PATH = PROJECT_ROOT / "src"
-if str(SRC_PATH) not in sys.path:
-    sys.path.insert(0, str(SRC_PATH))
-
-from asr_system.interfaces.batch.runner import BatchRunner  # noqa: E402
+from asr_system.config import get_settings
+from asr_system.logging_config import setup_logging
 
 if __name__ == "__main__":
+    settings = get_settings()
+    setup_logging(settings.app.log_level)
+
+    from asr_system.interfaces.batch.runner import BatchRunner
+
     processed = BatchRunner().run(date.today())
     print(f"processed_calls={len(processed)}")

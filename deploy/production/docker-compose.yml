@@ -15,9 +15,9 @@ services:
     container_name: airflow-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
+      POSTGRES_USER: ${AIRFLOW_DB_USER:-airflow}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME:-airflow}
     volumes:
       - airflow_db_data:/var/lib/postgresql/data
 
@@ -27,10 +27,23 @@ services:
     restart: unless-stopped
     depends_on:
       - airflow-db
+    env_file:
+      - .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-db/${AIRFLOW_DB_NAME:-airflow}
+      AIRFLOW__SECRETS__BACKEND: airflow.providers.hashicorp.secrets.vault.VaultBackend
+      AIRFLOW__SECRETS__BACKEND_KWARGS: >-
+        {
+          "connections_path": "asr-system/airflow/connections",
+          "variables_path": "asr-system/airflow/variables",
+          "url": "${VAULT_ADDR}",
+          "auth_type": "approle",
+          "role_id": "${VAULT_ROLE_ID}",
+          "secret_id": "${VAULT_SECRET_ID}",
+          "mount_point": "secret"
+        }
     ports:
       - "8081:8080"
     volumes:
@@ -43,10 +56,23 @@ services:
     restart: unless-stopped
     depends_on:
       - airflow-db
+    env_file:
+      - .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-db/${AIRFLOW_DB_NAME:-airflow}
+      AIRFLOW__SECRETS__BACKEND: airflow.providers.hashicorp.secrets.vault.VaultBackend
+      AIRFLOW__SECRETS__BACKEND_KWARGS: >-
+        {
+          "connections_path": "asr-system/airflow/connections",
+          "variables_path": "asr-system/airflow/variables",
+          "url": "${VAULT_ADDR}",
+          "auth_type": "approle",
+          "role_id": "${VAULT_ROLE_ID}",
+          "secret_id": "${VAULT_SECRET_ID}",
+          "mount_point": "secret"
+        }
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: asr-config
+  namespace: asr-system
+data:
+  APP_ENV: "prod"
+  APP_LOG_LEVEL: "INFO"
+  BATCH_INPUT_DIR: "/app/data/input"
+  BATCH_OUTPUT_DIR: "/app/data/output"
+  BATCH_ASR_PROVIDER: "mock"
+  BATCH_ASR_MODEL: "whisper-large-v3-turbo"
+  BATCH_EMOTION_PROVIDER: "rule"
+  BATCH_EMOTION_MODEL: "cointegrated/rubert-tiny2"
+  ONLINE_API_HOST: "0.0.0.0"
+  ONLINE_API_PORT: "8080"
+  VAULT_ENABLED: "true"
+  VAULT_AUTH_METHOD: "approle"
+  VAULT_MOUNT_POINT: "secret"
+  VAULT_BASE_PATH: "asr-system"
