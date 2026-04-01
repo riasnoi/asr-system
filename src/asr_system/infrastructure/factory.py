@@ -52,7 +52,7 @@ def create_emotion_adapter(settings: Settings) -> EmotionPort:
     raise ValueError(f"Unknown emotion provider: {provider}")
 
 
-def create_speaker_adapter(settings: Settings) -> SpeakerAttributionPort:
+def create_speaker_adapter(_settings: Settings) -> SpeakerAttributionPort:
     from asr_system.infrastructure.speaker.rule_speaker import AlternatingSpeakerAttribution
 
     return AlternatingSpeakerAttribution()

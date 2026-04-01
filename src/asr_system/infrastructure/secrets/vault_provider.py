@@ -84,6 +84,6 @@ class VaultSecretsProvider:
         for scope in scopes:
             try:
                 result[scope] = self.get_secret(scope)
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 logger.warning("Failed to load Vault scope '%s', skipping", scope, exc_info=True)
         return result

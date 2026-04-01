@@ -23,7 +23,7 @@ class BatchProcessCallsUseCase:
         for path in paths:
             try:
                 processed_call_ids.append(self.process_call.execute(path))
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 logger.exception("Failed to process %s, skipping", path)
         logger.info("Batch complete: %d/%d calls processed", len(processed_call_ids), len(paths))
         return processed_call_ids

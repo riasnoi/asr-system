@@ -2,10 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from asr_system.infrastructure.secrets.vault_provider import (
-    VaultSecretsProvider,
-    VaultSettings,
-)
+from asr_system.infrastructure.secrets.vault_provider import VaultSecretsProvider, VaultSettings
 
 
 @pytest.fixture()

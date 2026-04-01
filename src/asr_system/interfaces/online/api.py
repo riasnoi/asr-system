@@ -44,7 +44,7 @@ _state = _AppState()
 
 
 @asynccontextmanager
-async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
+async def _lifespan(_application: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     _state.utterances_repo = JsonUtteranceRepository(settings.storage.output_dir)
     _state.scores_repo = JsonCallScoreRepository(settings.storage.output_dir)
@@ -74,7 +74,7 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["ops"])
 
 
 @app.exception_handler(DomainError)
-async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
+async def domain_error_handler(_request: Request, exc: DomainError) -> JSONResponse:
     logger.warning("Domain error: %s", exc)
     if isinstance(exc, CallNotFoundError):
         return JSONResponse(status_code=404, content={"detail": str(exc)})

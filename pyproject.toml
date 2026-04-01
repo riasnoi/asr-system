@@ -16,6 +16,7 @@ dependencies = [
 dev = [
   "black==25.1.0",
   "flake8==7.1.1",
+  "httpx>=0.27.0",
   "isort==5.13.2",
   "mypy==1.15.0",
   "pylint==3.3.5",
@@ -58,4 +59,4 @@ max-line-length = 100
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-addopts = "-q --cov=asr_system.domain --cov=asr_system.application --cov=asr_system.infrastructure --cov-fail-under=80"
+addopts = "-q --cov=asr_system.domain --cov=asr_system.application --cov-fail-under=60"

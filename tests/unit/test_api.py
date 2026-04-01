@@ -12,12 +12,12 @@ from asr_system.interfaces.online.api import _state, app
 
 @pytest.fixture(autouse=True)
 def _setup_state(tmp_path):
+    from asr_system.application.use_cases.get_call_card import GetCallCardUseCase
+    from asr_system.application.use_cases.list_calls import ListCallsUseCase
     from asr_system.infrastructure.repositories.json_store import (
         JsonCallScoreRepository,
         JsonUtteranceRepository,
     )
-    from asr_system.application.use_cases.get_call_card import GetCallCardUseCase
-    from asr_system.application.use_cases.list_calls import ListCallsUseCase
 
     _state.utterances_repo = JsonUtteranceRepository(str(tmp_path))
     _state.scores_repo = JsonCallScoreRepository(str(tmp_path))

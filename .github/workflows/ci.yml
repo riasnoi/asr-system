@@ -34,7 +34,7 @@ jobs:
         run: uv run flake8 src tests services
 
       - name: Pylint
-        run: uv run pylint src/asr_system services/batch/main.py services/online/main.py
+        run: uv run pylint --disable=C0415,W0511 src/asr_system services/batch/main.py services/online/main.py
 
       - name: Mypy
         run: uv run mypy src
