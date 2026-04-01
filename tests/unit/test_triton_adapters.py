@@ -12,9 +12,11 @@ from asr_system.domain.value_objects import Emotion
 from asr_system.infrastructure.asr.triton_asr import TritonAsrAdapter
 from asr_system.infrastructure.emotion.triton_emotion import TritonEmotionAdapter
 
+_FAKE_REQUEST = httpx.Request("POST", "http://triton:8000/v2/models/test/infer")
+
 
 def _mock_response(json_body: dict, status_code: int = 200) -> httpx.Response:
-    return httpx.Response(status_code=status_code, json=json_body)
+    return httpx.Response(status_code=status_code, json=json_body, request=_FAKE_REQUEST)
 
 
 class TestTritonAsrAdapter:
@@ -44,7 +46,9 @@ class TestTritonAsrAdapter:
 
         adapter = TritonAsrAdapter(url="http://triton:8000", model="whisper")
         with patch("asr_system.infrastructure.asr.triton_asr.httpx.post") as mock_post:
-            mock_post.return_value = httpx.Response(status_code=500, text="Internal error")
+            mock_post.return_value = httpx.Response(
+                status_code=500, text="Internal error", request=_FAKE_REQUEST
+            )
             with pytest.raises(httpx.HTTPStatusError):
                 adapter.transcribe(str(audio_file))
 
@@ -98,6 +102,8 @@ class TestTritonEmotionAdapter:
     def test_classify_raises_on_http_error(self) -> None:
         adapter = TritonEmotionAdapter(url="http://triton:8000", model="rubert_emotion")
         with patch("asr_system.infrastructure.emotion.triton_emotion.httpx.post") as mock_post:
-            mock_post.return_value = httpx.Response(status_code=503, text="Unavailable")
+            mock_post.return_value = httpx.Response(
+                status_code=503, text="Unavailable", request=_FAKE_REQUEST
+            )
             with pytest.raises(httpx.HTTPStatusError):
                 adapter.classify("test")
