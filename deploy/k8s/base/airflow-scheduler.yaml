@@ -14,9 +14,11 @@ spec:
         app: airflow-scheduler
     spec:
       serviceAccountName: airflow
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: scheduler
-          image: apache/airflow:2.10.3
+          image: asr-airflow:placeholder
           args: ["scheduler"]
           envFrom:
             - configMapRef:

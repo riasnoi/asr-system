@@ -16,6 +16,10 @@ on:
         description: "Batch image tag (sha-xxxx or v1.0.0)"
         required: true
         default: "latest"
+      airflow_image_tag:
+        description: "Airflow image tag (sha-xxxx or v1.0.0)"
+        required: true
+        default: "latest"
 
 jobs:
   deploy:
@@ -34,10 +38,12 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "online=${{ inputs.online_image_tag }}" >> "$GITHUB_OUTPUT"
             echo "batch=${{ inputs.batch_image_tag }}" >> "$GITHUB_OUTPUT"
+            echo "airflow=${{ inputs.airflow_image_tag }}" >> "$GITHUB_OUTPUT"
           else
             SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
             echo "online=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
             echo "batch=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "airflow=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload K8s manifests and deploy script
@@ -59,11 +65,12 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_PAT }}
           ONLINE_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-online:${{ steps.tags.outputs.online }}
           BATCH_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-batch:${{ steps.tags.outputs.batch }}
+          AIRFLOW_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-airflow:${{ steps.tags.outputs.airflow }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: REMOTE_APP_DIR,GHCR_USERNAME,GHCR_TOKEN,ONLINE_IMAGE,BATCH_IMAGE
+          envs: REMOTE_APP_DIR,GHCR_USERNAME,GHCR_TOKEN,ONLINE_IMAGE,BATCH_IMAGE,AIRFLOW_IMAGE
           script: |
             chmod +x ${REMOTE_APP_DIR}/scripts/deploy/k8s_deploy.sh
             ${REMOTE_APP_DIR}/scripts/deploy/k8s_deploy.sh

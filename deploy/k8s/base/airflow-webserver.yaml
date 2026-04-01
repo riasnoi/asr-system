@@ -28,6 +28,8 @@ spec:
         app: airflow-webserver
     spec:
       serviceAccountName: airflow
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       initContainers:
         - name: wait-for-db
           image: postgres:16
@@ -40,13 +42,13 @@ spec:
                 sleep 3
               done
         - name: db-init
-          image: apache/airflow:2.10.3
+          image: asr-airflow:placeholder
           command: ["airflow", "db", "migrate"]
           envFrom:
             - configMapRef:
                 name: airflow-config
         - name: create-admin
-          image: apache/airflow:2.10.3
+          image: asr-airflow:placeholder
           command:
             - bash
             - -c
@@ -61,7 +63,7 @@ spec:
                 name: airflow-config
       containers:
         - name: webserver
-          image: apache/airflow:2.10.3
+          image: asr-airflow:placeholder
           args: ["webserver"]
           ports:
             - containerPort: 8080

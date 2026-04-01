@@ -68,3 +68,23 @@ jobs:
           push: true
           tags: ${{ steps.meta_online.outputs.tags }}
           labels: ${{ steps.meta_online.outputs.labels }}
+
+      - name: Extract airflow metadata
+        id: meta_airflow
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/asr-airflow
+          tags: |
+            type=sha
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push airflow image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.airflow
+          push: true
+          tags: ${{ steps.meta_airflow.outputs.tags }}
+          labels: ${{ steps.meta_airflow.outputs.labels }}

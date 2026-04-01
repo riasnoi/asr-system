@@ -29,3 +29,6 @@ images:
   - name: asr-batch
     newName: asr-batch
     newTag: placeholder
+  - name: asr-airflow
+    newName: asr-airflow
+    newTag: placeholder

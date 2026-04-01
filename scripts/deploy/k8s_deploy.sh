@@ -6,6 +6,7 @@ export KUBECONFIG="${HOME}/.kube/config"
 : "${REMOTE_APP_DIR:?REMOTE_APP_DIR is required}"
 : "${ONLINE_IMAGE:?ONLINE_IMAGE is required}"
 : "${BATCH_IMAGE:?BATCH_IMAGE is required}"
+: "${AIRFLOW_IMAGE:?AIRFLOW_IMAGE is required}"
 : "${GHCR_USERNAME:?GHCR_USERNAME is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
 
@@ -30,6 +31,7 @@ cd "${K8S_DIR}"
 kubectl kustomize . \
   | sed "s|asr-online:placeholder|${ONLINE_IMAGE}|g" \
   | sed "s|asr-batch:placeholder|${BATCH_IMAGE}|g" \
+  | sed "s|asr-airflow:placeholder|${AIRFLOW_IMAGE}|g" \
   | kubectl apply -f -
 
 collect_diagnostics() {
