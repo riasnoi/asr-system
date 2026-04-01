@@ -33,7 +33,22 @@ kubectl kustomize . \
   | kubectl apply -f -
 
 echo "==> Waiting for online deployment rollout"
-kubectl -n "${NAMESPACE}" rollout status deployment/asr-online --timeout=180s
+if ! kubectl -n "${NAMESPACE}" rollout status deployment/asr-online --timeout=300s; then
+  echo ""
+  echo "!!! Rollout failed — collecting diagnostics"
+  echo "--- Pod status ---"
+  kubectl -n "${NAMESPACE}" get pods -l app=asr-online -o wide
+  echo "--- Recent pod events ---"
+  kubectl -n "${NAMESPACE}" get events --sort-by='.lastTimestamp' --field-selector involvedObject.kind=Pod | tail -30
+  echo "--- Pod descriptions ---"
+  for pod in $(kubectl -n "${NAMESPACE}" get pods -l app=asr-online -o jsonpath='{.items[*].metadata.name}'); do
+    echo "=== describe ${pod} ==="
+    kubectl -n "${NAMESPACE}" describe pod "${pod}" | tail -25
+    echo "=== logs ${pod} ==="
+    kubectl -n "${NAMESPACE}" logs "${pod}" --tail=40 2>&1 || true
+  done
+  exit 1
+fi
 
 echo "==> Verifying pods"
 kubectl -n "${NAMESPACE}" get pods -l app=asr-online
