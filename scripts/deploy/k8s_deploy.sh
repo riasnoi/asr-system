@@ -13,7 +13,7 @@ NAMESPACE="asr-system"
 K8S_DIR="${REMOTE_APP_DIR}/deploy/k8s/base"
 
 echo "==> Ensuring namespace exists"
-kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace "${NAMESPACE}"
+kubectl create namespace "${NAMESPACE}" 2>/dev/null || true
 
 echo "==> Creating GHCR pull secret"
 kubectl -n "${NAMESPACE}" delete secret ghcr-pull-secret --ignore-not-found
