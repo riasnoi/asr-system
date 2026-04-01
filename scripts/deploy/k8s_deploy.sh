@@ -28,29 +28,47 @@ cd "${K8S_DIR}"
 # kubectl kustomize does not support 'edit set image', so we render and
 # replace image placeholders with the actual GHCR image URIs.
 kubectl kustomize . \
-  | sed "s|image: asr-online:placeholder|image: ${ONLINE_IMAGE}|g" \
-  | sed "s|image: asr-batch:placeholder|image: ${BATCH_IMAGE}|g" \
+  | sed "s|asr-online:placeholder|${ONLINE_IMAGE}|g" \
+  | sed "s|asr-batch:placeholder|${BATCH_IMAGE}|g" \
   | kubectl apply -f -
 
-echo "==> Waiting for online deployment rollout"
-if ! kubectl -n "${NAMESPACE}" rollout status deployment/asr-online --timeout=300s; then
+collect_diagnostics() {
+  local label="$1"
   echo ""
-  echo "!!! Rollout failed — collecting diagnostics"
+  echo "!!! Rollout failed for ${label} — collecting diagnostics"
   echo "--- Pod status ---"
-  kubectl -n "${NAMESPACE}" get pods -l app=asr-online -o wide
-  echo "--- Recent pod events ---"
-  kubectl -n "${NAMESPACE}" get events --sort-by='.lastTimestamp' --field-selector involvedObject.kind=Pod | tail -30
-  echo "--- Pod descriptions ---"
-  for pod in $(kubectl -n "${NAMESPACE}" get pods -l app=asr-online -o jsonpath='{.items[*].metadata.name}'); do
+  kubectl -n "${NAMESPACE}" get pods -l "app=${label}" -o wide
+  echo "--- Pod descriptions and logs ---"
+  for pod in $(kubectl -n "${NAMESPACE}" get pods -l "app=${label}" -o jsonpath='{.items[*].metadata.name}'); do
     echo "=== describe ${pod} ==="
     kubectl -n "${NAMESPACE}" describe pod "${pod}" | tail -25
     echo "=== logs ${pod} ==="
     kubectl -n "${NAMESPACE}" logs "${pod}" --tail=40 2>&1 || true
   done
+}
+
+echo "==> Waiting for online deployment rollout"
+if ! kubectl -n "${NAMESPACE}" rollout status deployment/asr-online --timeout=300s; then
+  collect_diagnostics "asr-online"
+  exit 1
+fi
+
+echo "==> Waiting for Airflow DB"
+kubectl -n "${NAMESPACE}" rollout status statefulset/airflow-db --timeout=120s
+
+echo "==> Waiting for Airflow webserver"
+if ! kubectl -n "${NAMESPACE}" rollout status deployment/airflow-webserver --timeout=300s; then
+  collect_diagnostics "airflow-webserver"
+  exit 1
+fi
+
+echo "==> Waiting for Airflow scheduler"
+if ! kubectl -n "${NAMESPACE}" rollout status deployment/airflow-scheduler --timeout=300s; then
+  collect_diagnostics "airflow-scheduler"
   exit 1
 fi
 
 echo "==> Verifying pods"
-kubectl -n "${NAMESPACE}" get pods -l app=asr-online
+kubectl -n "${NAMESPACE}" get pods
 
 echo "==> Deploy completed successfully"

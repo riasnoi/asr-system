@@ -14,6 +14,13 @@ resources:
   - online-hpa.yaml
   - ingress.yaml
   - batch-cronjob.yaml
+  # Airflow
+  - airflow-rbac.yaml
+  - airflow-configmap.yaml
+  - airflow-dags-configmap.yaml
+  - airflow-db.yaml
+  - airflow-webserver.yaml
+  - airflow-scheduler.yaml
 
 images:
   - name: asr-online
