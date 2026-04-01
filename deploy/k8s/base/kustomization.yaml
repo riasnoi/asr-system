@@ -6,7 +6,8 @@ namespace: asr-system
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml
+  # secret.yaml is excluded — Vault credentials are created/updated by k8s_deploy.sh
+  # to avoid overwriting pre-existing secrets with an empty template.
   - pvc.yaml
   - online-deployment.yaml
   - online-service.yaml

@@ -83,8 +83,12 @@ def _apply_vault_overrides() -> dict[str, dict[str, str]]:
     from asr_system.infrastructure.secrets.vault_provider import VaultSecretsProvider
 
     logger.info("Vault enabled, loading secrets from %s", vault_cfg.addr)
-    provider = VaultSecretsProvider(vault_cfg)
-    return provider.load_all()
+    try:
+        provider = VaultSecretsProvider(vault_cfg)
+        return provider.load_all()
+    except Exception:
+        logger.exception("Failed to connect to Vault — starting with default/env secrets")
+        return {}
 
 
 @lru_cache(maxsize=1)
