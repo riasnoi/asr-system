@@ -40,17 +40,6 @@ jobs:
             echo "batch=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fetch GHCR credentials from Vault
-        uses: hashicorp/vault-action@v3
-        with:
-          url: ${{ secrets.VAULT_ADDR }}
-          method: approle
-          roleId: ${{ secrets.VAULT_ROLE_ID }}
-          secretId: ${{ secrets.VAULT_SECRET_ID }}
-          secrets: |
-            secret/data/asr-system/registry GHCR_USERNAME | GHCR_USERNAME ;
-            secret/data/asr-system/registry GHCR_TOKEN | GHCR_TOKEN
-
       - name: Upload K8s manifests and deploy script
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -66,8 +55,8 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         env:
           REMOTE_APP_DIR: ${{ secrets.REMOTE_APP_DIR }}
-          GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ env.GHCR_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PAT }}
           ONLINE_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-online:${{ steps.tags.outputs.online }}
           BATCH_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-batch:${{ steps.tags.outputs.batch }}
         with:
