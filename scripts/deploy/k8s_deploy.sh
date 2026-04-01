@@ -47,6 +47,11 @@ collect_diagnostics() {
   done
 }
 
+echo "==> Restarting deployments to pick up ConfigMap changes"
+kubectl -n "${NAMESPACE}" rollout restart deployment/asr-online
+kubectl -n "${NAMESPACE}" rollout restart deployment/airflow-webserver
+kubectl -n "${NAMESPACE}" rollout restart deployment/airflow-scheduler
+
 echo "==> Waiting for online deployment rollout"
 if ! kubectl -n "${NAMESPACE}" rollout status deployment/asr-online --timeout=300s; then
   collect_diagnostics "asr-online"

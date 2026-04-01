@@ -21,7 +21,9 @@
 ```
 secret/data/asr-system/
   app/           # DB_DSN
-  batch/         # BATCH_STORAGE_ACCESS_KEY, BATCH_STORAGE_SECRET_KEY
+  batch/         # BATCH_ASR_PROVIDER, BATCH_ASR_MODEL, BATCH_ASR_REMOTE_URL,
+                 # BATCH_EMOTION_PROVIDER, BATCH_EMOTION_MODEL, BATCH_EMOTION_REMOTE_URL,
+                 # BATCH_STORAGE_ACCESS_KEY, BATCH_STORAGE_SECRET_KEY
   online/        # ONLINE_API_TOKEN
   airflow/       # POSTGRES_USER, POSTGRES_PASSWORD (Airflow DB)
   registry/      # GHCR_USERNAME, GHCR_TOKEN
@@ -62,11 +64,7 @@ path "secret/data/asr-system/registry" { capabilities = ["read"] }
 - `DEPLOY_USER`
 - `DEPLOY_SSH_KEY`
 - `REMOTE_APP_DIR`
-- `VAULT_ADDR`
-- `VAULT_ROLE_ID`
-- `VAULT_SECRET_ID`
-
-`GHCR_USERNAME` and `GHCR_TOKEN` are no longer stored in GitHub Secrets — they are fetched from Vault at deploy time.
+- `GHCR_PAT` — Personal Access Token with `read:packages` scope (for K8s image pull)
 
 ## Local setup
 

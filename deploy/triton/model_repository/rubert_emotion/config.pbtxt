@@ -1,0 +1,31 @@
+name: "rubert_emotion"
+backend: "python"
+max_batch_size: 0
+
+input [
+  {
+    name: "TEXT"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+output [
+  {
+    name: "EMOTION"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "CONFIDENCE"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+  }
+]

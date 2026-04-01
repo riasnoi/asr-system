@@ -17,6 +17,11 @@ def create_asr_adapter(settings: Settings) -> ASRPort:
 
         return MockAsrAdapter()
 
+    if provider == "remote":
+        from asr_system.infrastructure.asr.triton_asr import TritonAsrAdapter
+
+        return TritonAsrAdapter(url=settings.asr.remote_url, model=settings.asr.model_name)
+
     if provider == "whisper":
         try:
             from asr_system.infrastructure.asr.whisper_asr import WhisperAsrAdapter
@@ -37,6 +42,13 @@ def create_emotion_adapter(settings: Settings) -> EmotionPort:
         from asr_system.infrastructure.emotion.rule_based import RuleBasedEmotionAdapter
 
         return RuleBasedEmotionAdapter()
+
+    if provider == "remote":
+        from asr_system.infrastructure.emotion.triton_emotion import TritonEmotionAdapter
+
+        return TritonEmotionAdapter(
+            url=settings.emotion.remote_url, model=settings.emotion.model_name
+        )
 
     if provider == "rubert":
         try:

@@ -32,13 +32,15 @@ class DatabaseSettings(BaseEnvSettings):
 
 
 class AsrSettings(BaseEnvSettings):
-    provider: str = Field(default="whisper", alias="BATCH_ASR_PROVIDER")
+    provider: str = Field(default="mock", alias="BATCH_ASR_PROVIDER")
     model_name: str = Field(default="whisper-large-v3-turbo", alias="BATCH_ASR_MODEL")
+    remote_url: str = Field(default="", alias="BATCH_ASR_REMOTE_URL")
 
 
 class EmotionSettings(BaseEnvSettings):
-    provider: str = Field(default="rubert", alias="BATCH_EMOTION_PROVIDER")
+    provider: str = Field(default="rule", alias="BATCH_EMOTION_PROVIDER")
     model_name: str = Field(default="cointegrated/rubert-tiny2", alias="BATCH_EMOTION_MODEL")
+    remote_url: str = Field(default="", alias="BATCH_EMOTION_REMOTE_URL")
 
 
 class AirflowSettings(BaseEnvSettings):
@@ -91,22 +93,28 @@ def _apply_vault_overrides() -> dict[str, dict[str, str]]:
         return {}
 
 
+def _pick(src: dict[str, str], prefix: str) -> dict[str, str]:
+    """Extract keys starting with *prefix* from *src* (case-insensitive)."""
+    prefix_lower = prefix.lower()
+    return {k: v for k, v in src.items() if k.lower().startswith(prefix_lower)}
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     overrides = _apply_vault_overrides()
 
-    batch_secret_kw = overrides.get("batch", {})
-    online_secret_kw = overrides.get("online", {})
-    db_kw = overrides.get("app", {})
+    batch_kw = overrides.get("batch", {})
+    online_kw = overrides.get("online", {})
+    app_kw = overrides.get("app", {})
 
     return Settings(
         app=AppSettings(),
         storage=StorageSettings(),
-        db=DatabaseSettings(**db_kw),
-        asr=AsrSettings(),
-        emotion=EmotionSettings(),
+        db=DatabaseSettings(**_pick(app_kw, "DB_")),
+        asr=AsrSettings(**_pick(batch_kw, "BATCH_ASR_")),
+        emotion=EmotionSettings(**_pick(batch_kw, "BATCH_EMOTION_")),
         airflow=AirflowSettings(),
         api=ApiSettings(),
-        batch_secrets=BatchSecretsSettings(**batch_secret_kw),
-        online_secrets=OnlineSecretsSettings(**online_secret_kw),
+        batch_secrets=BatchSecretsSettings(**_pick(batch_kw, "BATCH_STORAGE_")),
+        online_secrets=OnlineSecretsSettings(**_pick(online_kw, "ONLINE_")),
     )
