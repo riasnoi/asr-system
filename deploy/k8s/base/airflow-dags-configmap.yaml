@@ -4,6 +4,10 @@ metadata:
   name: airflow-dags
   namespace: asr-system
 data:
+  # Ignore Kubernetes ConfigMap internal symlink directories (..data, ..timestamp).
+  # Without this Airflow crashes with "Detected recursive loop" on startup.
+  .airflowignore: |
+    ..*
   nightly_batch.py: |
     """Nightly ASR batch DAG.
 
