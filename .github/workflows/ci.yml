@@ -6,20 +6,18 @@ on:
     branches: [main]
 
 jobs:
-  quality-and-build:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
         run: uv sync --frozen --all-groups
@@ -39,8 +37,41 @@ jobs:
       - name: Mypy
         run: uv run mypy src
 
-      - name: Unit tests with coverage
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: Pytest with coverage
         run: uv run pytest
+
+  smoke:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
 
       - name: Smoke test online API
         env:
@@ -54,8 +85,19 @@ jobs:
           curl -fsS http://127.0.0.1:8080/calls
           kill ${API_PID}
 
+  build:
+    name: Build Images
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Build batch image
         run: docker build -f Dockerfile.batch -t asr-batch:ci .
 
       - name: Build online image
         run: docker build -f Dockerfile.online -t asr-online:ci .
+
+      - name: Build airflow image
+        run: docker build -f Dockerfile.airflow -t asr-airflow:ci .

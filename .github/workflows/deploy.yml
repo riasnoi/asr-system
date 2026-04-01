@@ -22,29 +22,38 @@ on:
         default: "latest"
 
 jobs:
-  deploy:
+  prepare:
+    name: Upload Manifests
     runs-on: ubuntu-latest
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
 
+    outputs:
+      online_image: ${{ steps.tags.outputs.online_image }}
+      batch_image: ${{ steps.tags.outputs.batch_image }}
+      airflow_image: ${{ steps.tags.outputs.airflow_image }}
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Resolve image tags
         id: tags
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "online=${{ inputs.online_image_tag }}" >> "$GITHUB_OUTPUT"
-            echo "batch=${{ inputs.batch_image_tag }}" >> "$GITHUB_OUTPUT"
-            echo "airflow=${{ inputs.airflow_image_tag }}" >> "$GITHUB_OUTPUT"
+            ONLINE_TAG="${{ inputs.online_image_tag }}"
+            BATCH_TAG="${{ inputs.batch_image_tag }}"
+            AIRFLOW_TAG="${{ inputs.airflow_image_tag }}"
           else
             SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
-            echo "online=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "batch=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "airflow=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            ONLINE_TAG="sha-${SHORT_SHA}"
+            BATCH_TAG="sha-${SHORT_SHA}"
+            AIRFLOW_TAG="sha-${SHORT_SHA}"
           fi
+          OWNER="${{ github.repository_owner }}"
+          echo "online_image=ghcr.io/${OWNER}/asr-online:${ONLINE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "batch_image=ghcr.io/${OWNER}/asr-batch:${BATCH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "airflow_image=ghcr.io/${OWNER}/asr-airflow:${AIRFLOW_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Upload K8s manifests and deploy script
         uses: appleboy/scp-action@v0.1.7
@@ -57,15 +66,21 @@ jobs:
           strip_components: 0
           overwrite: true
 
-      - name: Deploy to K8s cluster
+  deploy:
+    name: Deploy to Cluster
+    runs-on: ubuntu-latest
+    needs: prepare
+
+    steps:
+      - name: Apply manifests and rollout
         uses: appleboy/ssh-action@v1.2.0
         env:
           REMOTE_APP_DIR: ${{ secrets.REMOTE_APP_DIR }}
           GHCR_USERNAME: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GHCR_PAT }}
-          ONLINE_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-online:${{ steps.tags.outputs.online }}
-          BATCH_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-batch:${{ steps.tags.outputs.batch }}
-          AIRFLOW_IMAGE: ghcr.io/${{ github.repository_owner }}/asr-airflow:${{ steps.tags.outputs.airflow }}
+          ONLINE_IMAGE: ${{ needs.prepare.outputs.online_image }}
+          BATCH_IMAGE: ${{ needs.prepare.outputs.batch_image }}
+          AIRFLOW_IMAGE: ${{ needs.prepare.outputs.airflow_image }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
