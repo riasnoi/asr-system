@@ -91,7 +91,8 @@ spec:
             periodSeconds: 30
           volumeMounts:
             - name: dags
-              mountPath: /opt/airflow/dags
+              mountPath: /opt/airflow/dags/nightly_batch.py
+              subPath: nightly_batch.py
       volumes:
         - name: dags
           configMap:
