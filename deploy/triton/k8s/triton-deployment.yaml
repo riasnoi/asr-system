@@ -43,13 +43,12 @@ spec:
             - --repository-poll-secs=30
             - --log-verbose=1
           env:
-            # Кэш Hugging Face / hub на PVC (/models), чтобы веса не качались заново при новом поде
             - name: HF_HOME
-              value: /models/hf_cache
+              value: /hf_cache
             - name: HF_HUB_CACHE
-              value: /models/hf_cache/hub
+              value: /hf_cache/hub
             - name: TRANSFORMERS_CACHE
-              value: /models/hf_cache/transformers
+              value: /hf_cache/transformers
           ports:
             - containerPort: 8000
               name: http
@@ -75,12 +74,18 @@ spec:
             httpGet:
               path: /v2/health/live
               port: http
-            initialDelaySeconds: 60
+            initialDelaySeconds: 120
             periodSeconds: 30
+            failureThreshold: 5
           volumeMounts:
             - name: models
               mountPath: /models
+            - name: hf-cache
+              mountPath: /hf_cache
       volumes:
         - name: models
           persistentVolumeClaim:
             claimName: triton-models-pvc
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: triton-hf-cache-pvc
