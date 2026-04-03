@@ -1,15 +1,45 @@
+import logging
 import os
 from datetime import date
+from pathlib import Path
 
 from asr_system.config import get_settings
 from asr_system.logging_config import setup_logging
+
+logger = logging.getLogger(__name__)
+
+
+def _upload_results_to_s3(settings, target_date: date) -> None:
+    """Upload output files to S3 under results/{date}/ prefix."""
+    if not settings.s3.bucket:
+        return
+
+    import boto3
+
+    s3 = boto3.client(
+        "s3",
+        aws_access_key_id=settings.batch_secrets.storage_access_key,
+        aws_secret_access_key=settings.batch_secrets.storage_secret_key,
+        endpoint_url=settings.s3.endpoint_url or None,
+        region_name=settings.s3.region,
+    )
+
+    output_dir = Path(settings.storage.output_dir)
+    results_prefix = f"results/{target_date.isoformat()}"
+
+    for filename in ("call_scores.jsonl", "utterances.jsonl"):
+        local_path = output_dir / filename
+        if not local_path.exists():
+            continue
+        s3_key = f"{results_prefix}/{filename}"
+        s3.upload_file(str(local_path), settings.s3.bucket, s3_key)
+        logger.info("Uploaded %s → s3://%s/%s", filename, settings.s3.bucket, s3_key)
+
 
 if __name__ == "__main__":
     settings = get_settings()
     setup_logging(settings.app.log_level)
 
-    # Respect Airflow logical date when running inside a KubernetesPodOperator.
-    # Falls back to today for local / manual runs.
     raw = os.environ.get("AIRFLOW_CTX_LOGICAL_DATE", "")
     target_date = date.fromisoformat(raw[:10]) if raw else date.today()
 
@@ -17,3 +47,5 @@ if __name__ == "__main__":
 
     processed = BatchRunner().run(target_date)
     print(f"processed_calls={len(processed)} date={target_date}")
+
+    _upload_results_to_s3(settings, target_date)
