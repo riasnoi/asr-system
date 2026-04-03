@@ -49,6 +49,10 @@ sync_repo() {
   pod=$(kubectl -n "${NAMESPACE}" get pod -l app=triton -o jsonpath='{.items[0].metadata.name}')
   kubectl -n "${NAMESPACE}" cp "${REPO_DIR}/." "${pod}:/models/"
   echo "==> model_repository copied"
+
+  echo "==> Restarting Triton so it picks up new models"
+  kubectl -n "${NAMESPACE}" rollout restart deployment/triton
+  kubectl -n "${NAMESPACE}" rollout status deployment/triton --timeout=600s
 }
 
 sync_repo
