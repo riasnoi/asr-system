@@ -53,6 +53,13 @@ class ApiSettings(BaseEnvSettings):
     port: int = Field(default=8080, alias="ONLINE_API_PORT")
 
 
+class S3Settings(BaseEnvSettings):
+    bucket: str = Field(default="", alias="BATCH_S3_BUCKET")
+    endpoint_url: str = Field(default="", alias="BATCH_S3_ENDPOINT_URL")
+    prefix: str = Field(default="recordings", alias="BATCH_S3_PREFIX")
+    region: str = Field(default="us-east-1", alias="BATCH_S3_REGION")
+
+
 class BatchSecretsSettings(BaseEnvSettings):
     storage_access_key: str = Field(default="", alias="BATCH_STORAGE_ACCESS_KEY")
     storage_secret_key: str = Field(default="", alias="BATCH_STORAGE_SECRET_KEY")
@@ -65,6 +72,7 @@ class OnlineSecretsSettings(BaseEnvSettings):
 class Settings(BaseSettings):
     app: AppSettings
     storage: StorageSettings
+    s3: S3Settings
     db: DatabaseSettings
     asr: AsrSettings
     emotion: EmotionSettings
@@ -110,6 +118,7 @@ def get_settings() -> Settings:
     return Settings(
         app=AppSettings(),
         storage=StorageSettings(),
+        s3=S3Settings(**_pick(batch_kw, "BATCH_S3_")),
         db=DatabaseSettings(**_pick(app_kw, "DB_")),
         asr=AsrSettings(**_pick(batch_kw, "BATCH_ASR_")),
         emotion=EmotionSettings(**_pick(batch_kw, "BATCH_EMOTION_")),

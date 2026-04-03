@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from asr_system.config import Settings
-from asr_system.domain.ports import ASRPort, EmotionPort, SpeakerAttributionPort
+from asr_system.domain.ports import ASRPort, EmotionPort, IngestPort, SpeakerAttributionPort
 
 logger = logging.getLogger(__name__)
 
@@ -68,3 +68,23 @@ def create_speaker_adapter(_settings: Settings) -> SpeakerAttributionPort:
     from asr_system.infrastructure.speaker.rule_speaker import AlternatingSpeakerAttribution
 
     return AlternatingSpeakerAttribution()
+
+
+def create_ingest_adapter(settings: Settings) -> IngestPort:
+    bucket = settings.s3.bucket
+    if bucket:
+        from asr_system.infrastructure.ingest.s3 import S3Ingest
+
+        return S3Ingest(
+            bucket=bucket,
+            access_key=settings.batch_secrets.storage_access_key,
+            secret_key=settings.batch_secrets.storage_secret_key,
+            local_input_dir=settings.storage.input_dir,
+            prefix=settings.s3.prefix,
+            endpoint_url=settings.s3.endpoint_url,
+            region=settings.s3.region,
+        )
+
+    from asr_system.infrastructure.ingest.local_fs import LocalFsIngest
+
+    return LocalFsIngest(settings.storage.input_dir)

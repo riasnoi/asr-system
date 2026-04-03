@@ -9,9 +9,9 @@ from asr_system.config import get_settings
 from asr_system.infrastructure.factory import (
     create_asr_adapter,
     create_emotion_adapter,
+    create_ingest_adapter,
     create_speaker_adapter,
 )
-from asr_system.infrastructure.ingest.local_fs import LocalFsIngest
 from asr_system.infrastructure.repositories.json_store import (
     JsonCallScoreRepository,
     JsonUtteranceRepository,
@@ -33,13 +33,14 @@ class BatchRunner:
             scores_repo=scores_repo,
         )
         self.use_case = BatchProcessCallsUseCase(
-            ingest=LocalFsIngest(settings.storage.input_dir),
+            ingest=create_ingest_adapter(settings),
             process_call=process_call,
         )
         logger.info(
-            "BatchRunner initialised (asr=%s, emotion=%s, input=%s, output=%s)",
+            "BatchRunner initialised (asr=%s, emotion=%s, ingest=%s, input=%s, output=%s)",
             settings.asr.provider,
             settings.emotion.provider,
+            "s3" if settings.s3.bucket else "local",
             settings.storage.input_dir,
             settings.storage.output_dir,
         )
