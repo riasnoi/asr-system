@@ -25,10 +25,12 @@ VAULT_MOUNT="${VAULT_MOUNT_POINT:-secret}"
 export VAULT_ADDR
 
 echo "==> Reading ASR DB credentials from Vault (${VAULT_ADDR})"
-ASR_DB_USER=$(vault kv get -mount="${VAULT_MOUNT}" -field=POSTGRES_USER asr-system/app)
-ASR_DB_PASSWORD=$(vault kv get -mount="${VAULT_MOUNT}" -field=POSTGRES_PASSWORD asr-system/app)
-: "${ASR_DB_USER:?POSTGRES_USER not found in Vault}"
-: "${ASR_DB_PASSWORD:?POSTGRES_PASSWORD not found in Vault}"
+# vault read with the explicit /data/ path bypasses the sys/internal/ui/mounts
+# discovery request, so a minimal read-only policy is sufficient.
+ASR_DB_USER=$(vault read -field=POSTGRES_USER "${VAULT_MOUNT}/data/asr-system/app")
+ASR_DB_PASSWORD=$(vault read -field=POSTGRES_PASSWORD "${VAULT_MOUNT}/data/asr-system/app")
+: "${ASR_DB_USER:?POSTGRES_USER not found in Vault at ${VAULT_MOUNT}/data/asr-system/app}"
+: "${ASR_DB_PASSWORD:?POSTGRES_PASSWORD not found in Vault at ${VAULT_MOUNT}/data/asr-system/app}"
 
 echo "==> Ensuring namespace exists"
 kubectl create namespace "${NAMESPACE}" 2>/dev/null || true
