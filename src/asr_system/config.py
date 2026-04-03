@@ -39,7 +39,7 @@ class AsrSettings(BaseEnvSettings):
 
 class EmotionSettings(BaseEnvSettings):
     provider: str = Field(default="rule", alias="BATCH_EMOTION_PROVIDER")
-    model_name: str = Field(default="cointegrated/rubert-tiny2", alias="BATCH_EMOTION_MODEL")
+    model_name: str = Field(default="rubert-tiny2", alias="BATCH_EMOTION_MODEL")
     remote_url: str = Field(default="", alias="BATCH_EMOTION_REMOTE_URL")
 
 

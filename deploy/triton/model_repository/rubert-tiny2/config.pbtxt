@@ -1,10 +1,10 @@
-name: "whisper"
+name: "rubert-tiny2"
 backend: "python"
 max_batch_size: 0
 
 input [
   {
-    name: "AUDIO_DATA"
+    name: "TEXT"
     data_type: TYPE_STRING
     dims: [ 1 ]
   }
@@ -12,8 +12,13 @@ input [
 
 output [
   {
-    name: "SEGMENTS"
+    name: "EMOTION"
     data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
+  {
+    name: "CONFIDENCE"
+    data_type: TYPE_FP32
     dims: [ 1 ]
   }
 ]

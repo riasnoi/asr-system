@@ -1,10 +1,10 @@
-name: "rubert_emotion"
+name: "whisper-large-v3-turbo"
 backend: "python"
 max_batch_size: 0
 
 input [
   {
-    name: "TEXT"
+    name: "AUDIO_DATA"
     data_type: TYPE_STRING
     dims: [ 1 ]
   }
@@ -12,13 +12,8 @@ input [
 
 output [
   {
-    name: "EMOTION"
+    name: "SEGMENTS"
     data_type: TYPE_STRING
-    dims: [ 1 ]
-  },
-  {
-    name: "CONFIDENCE"
-    data_type: TYPE_FP32
     dims: [ 1 ]
   }
 ]
