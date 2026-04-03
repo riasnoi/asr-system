@@ -47,6 +47,22 @@ sync_repo() {
   kubectl -n "${NAMESPACE}" wait --for=condition=ready pod -l app=triton --timeout=300s
   local pod
   pod=$(kubectl -n "${NAMESPACE}" get pod -l app=triton -o jsonpath='{.items[0].metadata.name}')
+
+  echo "==> Removing /models dirs not present in repo"
+  # Build list of valid model names from local repo
+  local valid_names
+  valid_names=$(ls "${REPO_DIR}" | tr '\n' '|' | sed 's/|$//')
+  kubectl -n "${NAMESPACE}" exec "${pod}" -- sh -c "
+    for d in /models/*/; do
+      [ -d \"\$d\" ] || continue
+      name=\$(basename \"\$d\")
+      if ! echo \"${valid_names}\" | grep -qE \"(^|\|)\${name}(\$|\|)\"; then
+        echo \"Removing stale model: \$name\"
+        rm -rf \"/models/\$name\"
+      fi
+    done
+  "
+
   kubectl -n "${NAMESPACE}" cp "${REPO_DIR}/." "${pod}:/models/"
   echo "==> model_repository copied"
 
