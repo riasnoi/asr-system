@@ -11,6 +11,20 @@ spec:
       targetPort: 5432
   clusterIP: None
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: asr-db-external
+  namespace: asr-system
+spec:
+  selector:
+    app: asr-db
+  type: NodePort
+  ports:
+    - port: 5432
+      targetPort: 5432
+      nodePort: 30432
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
