@@ -94,6 +94,7 @@ jobs:
           username: ${{ secrets.TRITON_DEPLOY_USER }}
           key: ${{ secrets.TRITON_DEPLOY_SSH_KEY }}
           envs: TRITON_REMOTE_APP_DIR,TRITON_IMAGE,GHCR_USERNAME,GHCR_TOKEN,SYNC_MODEL_REPOSITORY
+          command_timeout: 20m
           script: |
             chmod +x "${TRITON_REMOTE_APP_DIR}/scripts/deploy/triton_k8s_deploy.sh"
             "${TRITON_REMOTE_APP_DIR}/scripts/deploy/triton_k8s_deploy.sh"
