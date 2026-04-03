@@ -49,8 +49,9 @@ Token auth is available as a fallback for development.
 2. Создать данные под пути (префикс `asr-system` задаётся `VAULT_BASE_PATH` в ConfigMap):
 
 ```bash
-# пример: приложение (DSN)
-vault kv put secret/asr-system/app DB_DSN="postgresql+psycopg2://user:pass@host:5432/asr"
+# DSN shared ASR database (must start with "postgresql://")
+vault kv put secret/asr-system/app \
+  DB_DSN="postgresql://asr_user:asr_password@asr-db:5432/asr"
 
 # batch: хранилище + при необходимости Triton (см. также раздел с vault kv patch ниже)
 vault kv put secret/asr-system/batch \
@@ -109,6 +110,12 @@ path "secret/data/asr-system/registry" { capabilities = ["read"] }
 - `DEPLOY_SSH_KEY`
 - `REMOTE_APP_DIR`
 - `GHCR_PAT` — Personal Access Token with `read:packages` scope (for K8s image pull)
+- `ASR_DB_USER` — PostgreSQL username for the shared ASR database (e.g. `asr_user`)
+- `ASR_DB_PASSWORD` — PostgreSQL password for the shared ASR database
+
+> The deploy script creates the `asr-db-credentials` K8s Secret from these two values.
+> Set `DB_DSN=postgresql://<ASR_DB_USER>:<ASR_DB_PASSWORD>@asr-db:5432/asr` in Vault `app/`
+> so the application can connect to the database at runtime.
 
 ### Triton / ML server (optional, separate from main K8s deploy)
 

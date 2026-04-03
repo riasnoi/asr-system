@@ -9,6 +9,8 @@ export KUBECONFIG="${HOME}/.kube/config"
 : "${AIRFLOW_IMAGE:?AIRFLOW_IMAGE is required}"
 : "${GHCR_USERNAME:?GHCR_USERNAME is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
+: "${ASR_DB_USER:?ASR_DB_USER is required}"
+: "${ASR_DB_PASSWORD:?ASR_DB_PASSWORD is required}"
 
 NAMESPACE="asr-system"
 K8S_DIR="${REMOTE_APP_DIR}/deploy/k8s/base"
@@ -22,6 +24,12 @@ kubectl -n "${NAMESPACE}" create secret docker-registry ghcr-pull-secret \
   --docker-server=ghcr.io \
   --docker-username="${GHCR_USERNAME}" \
   --docker-password="${GHCR_TOKEN}"
+
+echo "==> Creating ASR DB credentials secret"
+kubectl -n "${NAMESPACE}" delete secret asr-db-credentials --ignore-not-found
+kubectl -n "${NAMESPACE}" create secret generic asr-db-credentials \
+  --from-literal=POSTGRES_USER="${ASR_DB_USER}" \
+  --from-literal=POSTGRES_PASSWORD="${ASR_DB_PASSWORD}"
 
 echo "==> Rendering manifests with image overrides"
 cd "${K8S_DIR}"
@@ -59,6 +67,9 @@ if ! kubectl -n "${NAMESPACE}" rollout status deployment/asr-online --timeout=30
   collect_diagnostics "asr-online"
   exit 1
 fi
+
+echo "==> Waiting for ASR DB"
+kubectl -n "${NAMESPACE}" rollout status statefulset/asr-db --timeout=120s
 
 echo "==> Waiting for Airflow DB"
 kubectl -n "${NAMESPACE}" rollout status statefulset/airflow-db --timeout=120s

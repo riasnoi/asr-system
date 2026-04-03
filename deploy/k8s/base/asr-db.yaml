@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: asr-db
+  namespace: asr-system
+spec:
+  selector:
+    app: asr-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: asr-db
+  namespace: asr-system
+spec:
+  serviceName: asr-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: asr-db
+  template:
+    metadata:
+      labels:
+        app: asr-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: asr-db-credentials
+          env:
+            - name: POSTGRES_DB
+              value: asr
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 6
+  volumeClaimTemplates:
+    - metadata:
+        name: db-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

@@ -5,7 +5,14 @@ from __future__ import annotations
 import logging
 
 from asr_system.config import Settings
-from asr_system.domain.ports import ASRPort, EmotionPort, IngestPort, SpeakerAttributionPort
+from asr_system.domain.ports import (
+    ASRPort,
+    CallScoreRepositoryPort,
+    EmotionPort,
+    IngestPort,
+    SpeakerAttributionPort,
+    UtteranceRepositoryPort,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,3 +95,29 @@ def create_ingest_adapter(settings: Settings) -> IngestPort:
     from asr_system.infrastructure.ingest.local_fs import LocalFsIngest
 
     return LocalFsIngest(settings.storage.input_dir)
+
+
+def create_repository_adapters(
+    settings: Settings,
+) -> tuple[UtteranceRepositoryPort, CallScoreRepositoryPort]:
+    """Return (utterances_repo, scores_repo) backed by PostgreSQL or JSON files."""
+    dsn = settings.db.dsn
+    if dsn.startswith("postgresql"):
+        from asr_system.infrastructure.repositories.pg_store import (
+            PgCallScoreRepository,
+            PgUtteranceRepository,
+            make_pool,
+        )
+
+        pool = make_pool(dsn)
+        return PgUtteranceRepository(pool), PgCallScoreRepository(pool)
+
+    from asr_system.infrastructure.repositories.json_store import (
+        JsonCallScoreRepository,
+        JsonUtteranceRepository,
+    )
+
+    return (
+        JsonUtteranceRepository(settings.storage.output_dir),
+        JsonCallScoreRepository(settings.storage.output_dir),
+    )

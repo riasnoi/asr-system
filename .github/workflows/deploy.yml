@@ -81,11 +81,13 @@ jobs:
           ONLINE_IMAGE: ${{ needs.prepare.outputs.online_image }}
           BATCH_IMAGE: ${{ needs.prepare.outputs.batch_image }}
           AIRFLOW_IMAGE: ${{ needs.prepare.outputs.airflow_image }}
+          ASR_DB_USER: ${{ secrets.ASR_DB_USER }}
+          ASR_DB_PASSWORD: ${{ secrets.ASR_DB_PASSWORD }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: REMOTE_APP_DIR,GHCR_USERNAME,GHCR_TOKEN,ONLINE_IMAGE,BATCH_IMAGE,AIRFLOW_IMAGE
+          envs: REMOTE_APP_DIR,GHCR_USERNAME,GHCR_TOKEN,ONLINE_IMAGE,BATCH_IMAGE,AIRFLOW_IMAGE,ASR_DB_USER,ASR_DB_PASSWORD
           script: |
             chmod +x ${REMOTE_APP_DIR}/scripts/deploy/k8s_deploy.sh
             ${REMOTE_APP_DIR}/scripts/deploy/k8s_deploy.sh
