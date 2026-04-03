@@ -119,30 +119,22 @@ path "secret/data/asr-system/registry" { capabilities = ["read"] }
 > DB credentials (`POSTGRES_USER`, `POSTGRES_PASSWORD`) are read by the deploy script
 > **directly from Vault on the target server** — no need to duplicate them in GitHub Secrets.
 
-### Deploy-time Vault access (one-time server setup)
+### Deploy-time Vault access
 
 The deploy script reads `POSTGRES_USER` and `POSTGRES_PASSWORD` from
-`secret/asr-system/app` at deploy time using the `vault` CLI.
-It looks for a token in `/etc/vault-deploy.token` (or `$VAULT_DEPLOY_TOKEN_FILE`).
+`secret/asr-system/app` using the `vault` CLI on the target server.
 
-```bash
-# On the server — create a Vault policy and a long-lived token for deploy:
-vault policy write asr-deploy - <<'EOF'
-path "secret/data/asr-system/app" { capabilities = ["read"] }
-EOF
+**No extra setup required.** The `vault` CLI resolves the token automatically:
+1. `VAULT_TOKEN` environment variable (if set).
+2. `~/.vault-token` — written automatically by any previous `vault login` or
+   `vault token create` command on the server.
 
-vault token create \
-  -policy=asr-deploy \
-  -display-name="asr-deploy" \
-  -period=8760h \   # 1 year; rotate annually
-  -field=token \
-  | sudo tee /etc/vault-deploy.token
-sudo chmod 600 /etc/vault-deploy.token
-```
+Since you already configured Vault on the server (as root), the token is already
+in `~/.vault-token`. The deploy script just calls `vault kv get` — it works
+out of the box.
 
-> `$VAULT_ADDR` is picked up from the environment; it defaults to `http://127.0.0.1:8200`.
-> If your Vault listens on a different address, set `VAULT_ADDR` in `/etc/environment`
-> or prefix it when running the script.
+> `VAULT_ADDR` defaults to `http://127.0.0.1:8200`. Override via the
+> environment if your Vault listens on a different address.
 
 ### Triton / ML server (optional, separate from main K8s deploy)
 
