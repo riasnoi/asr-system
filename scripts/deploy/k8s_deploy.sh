@@ -13,41 +13,11 @@ export KUBECONFIG="${HOME}/.kube/config"
 NAMESPACE="asr-system"
 K8S_DIR="${REMOTE_APP_DIR}/deploy/k8s/base"
 
-# Namespace must exist before we can read K8s Secrets from it.
+: "${ASR_DB_USER:?ASR_DB_USER is required}"
+: "${ASR_DB_PASSWORD:?ASR_DB_PASSWORD is required}"
+
 echo "==> Ensuring namespace exists"
 kubectl create namespace "${NAMESPACE}" 2>/dev/null || true
-
-# ---------------------------------------------------------------------------
-# Vault: authenticate via AppRole (the same credentials the pods use).
-# role_id / secret_id are read from the asr-vault-credentials K8s Secret that
-# was created manually during cluster bootstrap.  This way no separate token
-# management is needed — the AppRole already has read access to asr-system/*.
-# Falls back to vault CLI's default ~/.vault-token for first-time bootstrap
-# before asr-vault-credentials has been created.
-# ---------------------------------------------------------------------------
-VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8200}"
-VAULT_MOUNT="${VAULT_MOUNT_POINT:-secret}"
-export VAULT_ADDR
-
-echo "==> Authenticating to Vault (${VAULT_ADDR})"
-if kubectl -n "${NAMESPACE}" get secret asr-vault-credentials >/dev/null 2>&1; then
-  _ROLE_ID=$(kubectl -n "${NAMESPACE}" get secret asr-vault-credentials \
-    -o jsonpath='{.data.VAULT_ROLE_ID}' | base64 -d)
-  _SECRET_ID=$(kubectl -n "${NAMESPACE}" get secret asr-vault-credentials \
-    -o jsonpath='{.data.VAULT_SECRET_ID}' | base64 -d)
-  VAULT_TOKEN=$(vault write -field=token auth/approle/login \
-    role_id="${_ROLE_ID}" secret_id="${_SECRET_ID}")
-  export VAULT_TOKEN
-  echo "    Authenticated via AppRole (asr-vault-credentials)"
-else
-  echo "    asr-vault-credentials not found — falling back to ~/.vault-token"
-fi
-
-echo "==> Reading ASR DB credentials from Vault"
-ASR_DB_USER=$(vault read -field=POSTGRES_USER "${VAULT_MOUNT}/data/asr-system/app")
-ASR_DB_PASSWORD=$(vault read -field=POSTGRES_PASSWORD "${VAULT_MOUNT}/data/asr-system/app")
-: "${ASR_DB_USER:?POSTGRES_USER not found in Vault at ${VAULT_MOUNT}/data/asr-system/app}"
-: "${ASR_DB_PASSWORD:?POSTGRES_PASSWORD not found in Vault at ${VAULT_MOUNT}/data/asr-system/app}"
 
 echo "==> Creating GHCR pull secret"
 kubectl -n "${NAMESPACE}" delete secret ghcr-pull-secret --ignore-not-found
