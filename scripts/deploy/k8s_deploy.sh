@@ -9,11 +9,38 @@ export KUBECONFIG="${HOME}/.kube/config"
 : "${AIRFLOW_IMAGE:?AIRFLOW_IMAGE is required}"
 : "${GHCR_USERNAME:?GHCR_USERNAME is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
-: "${ASR_DB_USER:?ASR_DB_USER is required}"
-: "${ASR_DB_PASSWORD:?ASR_DB_PASSWORD is required}"
 
 NAMESPACE="asr-system"
 K8S_DIR="${REMOTE_APP_DIR}/deploy/k8s/base"
+
+# ---------------------------------------------------------------------------
+# Vault helpers — read a field from a KV v2 secret without requiring jq.
+# VAULT_ADDR and VAULT_TOKEN must be available in the shell environment.
+# VAULT_TOKEN is read from VAULT_DEPLOY_TOKEN_FILE (default /etc/vault-deploy.token)
+# if not already set.
+# ---------------------------------------------------------------------------
+VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8200}"
+VAULT_DEPLOY_TOKEN_FILE="${VAULT_DEPLOY_TOKEN_FILE:-/etc/vault-deploy.token}"
+
+if [[ -z "${VAULT_TOKEN:-}" && -f "${VAULT_DEPLOY_TOKEN_FILE}" ]]; then
+  VAULT_TOKEN=$(cat "${VAULT_DEPLOY_TOKEN_FILE}")
+fi
+: "${VAULT_TOKEN:?VAULT_TOKEN is required (set it or create ${VAULT_DEPLOY_TOKEN_FILE})}"
+export VAULT_ADDR VAULT_TOKEN
+
+vault_get() {
+  # Usage: vault_get <mount> <secret_path> <field>
+  # Example: vault_get secret asr-system/app POSTGRES_USER
+  local mount="$1" path="$2" field="$3"
+  vault kv get -mount="${mount}" -field="${field}" "${path}"
+}
+
+echo "==> Reading ASR DB credentials from Vault"
+VAULT_MOUNT="${VAULT_MOUNT_POINT:-secret}"
+ASR_DB_USER=$(vault_get "${VAULT_MOUNT}" asr-system/app POSTGRES_USER)
+ASR_DB_PASSWORD=$(vault_get "${VAULT_MOUNT}" asr-system/app POSTGRES_PASSWORD)
+: "${ASR_DB_USER:?POSTGRES_USER not found in Vault at ${VAULT_MOUNT}/asr-system/app}"
+: "${ASR_DB_PASSWORD:?POSTGRES_PASSWORD not found in Vault at ${VAULT_MOUNT}/asr-system/app}"
 
 echo "==> Ensuring namespace exists"
 kubectl create namespace "${NAMESPACE}" 2>/dev/null || true

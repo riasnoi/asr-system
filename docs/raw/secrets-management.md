@@ -49,9 +49,14 @@ Token auth is available as a fallback for development.
 2. Создать данные под пути (префикс `asr-system` задаётся `VAULT_BASE_PATH` в ConfigMap):
 
 ```bash
-# DSN shared ASR database (must start with "postgresql://")
+# Shared ASR database — app DSN + deploy-time postgres credentials in one secret:
 vault kv put secret/asr-system/app \
-  DB_DSN="postgresql://asr_user:asr_password@asr-db:5432/asr"
+  DB_DSN="postgresql://asr_user:asr_password@asr-db:5432/asr" \
+  POSTGRES_USER="asr_user" \
+  POSTGRES_PASSWORD="asr_password"
+# DB_DSN is read by the application at runtime (psycopg2).
+# POSTGRES_USER / POSTGRES_PASSWORD are read by k8s_deploy.sh at deploy time
+# to create the asr-db-credentials K8s Secret.
 
 # batch: хранилище + при необходимости Triton (см. также раздел с vault kv patch ниже)
 vault kv put secret/asr-system/batch \
@@ -110,12 +115,34 @@ path "secret/data/asr-system/registry" { capabilities = ["read"] }
 - `DEPLOY_SSH_KEY`
 - `REMOTE_APP_DIR`
 - `GHCR_PAT` — Personal Access Token with `read:packages` scope (for K8s image pull)
-- `ASR_DB_USER` — PostgreSQL username for the shared ASR database (e.g. `asr_user`)
-- `ASR_DB_PASSWORD` — PostgreSQL password for the shared ASR database
 
-> The deploy script creates the `asr-db-credentials` K8s Secret from these two values.
-> Set `DB_DSN=postgresql://<ASR_DB_USER>:<ASR_DB_PASSWORD>@asr-db:5432/asr` in Vault `app/`
-> so the application can connect to the database at runtime.
+> DB credentials (`POSTGRES_USER`, `POSTGRES_PASSWORD`) are read by the deploy script
+> **directly from Vault on the target server** — no need to duplicate them in GitHub Secrets.
+
+### Deploy-time Vault access (one-time server setup)
+
+The deploy script reads `POSTGRES_USER` and `POSTGRES_PASSWORD` from
+`secret/asr-system/app` at deploy time using the `vault` CLI.
+It looks for a token in `/etc/vault-deploy.token` (or `$VAULT_DEPLOY_TOKEN_FILE`).
+
+```bash
+# On the server — create a Vault policy and a long-lived token for deploy:
+vault policy write asr-deploy - <<'EOF'
+path "secret/data/asr-system/app" { capabilities = ["read"] }
+EOF
+
+vault token create \
+  -policy=asr-deploy \
+  -display-name="asr-deploy" \
+  -period=8760h \   # 1 year; rotate annually
+  -field=token \
+  | sudo tee /etc/vault-deploy.token
+sudo chmod 600 /etc/vault-deploy.token
+```
+
+> `$VAULT_ADDR` is picked up from the environment; it defaults to `http://127.0.0.1:8200`.
+> If your Vault listens on a different address, set `VAULT_ADDR` in `/etc/environment`
+> or prefix it when running the script.
 
 ### Triton / ML server (optional, separate from main K8s deploy)
 
