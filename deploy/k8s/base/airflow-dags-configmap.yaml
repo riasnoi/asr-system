@@ -84,7 +84,10 @@ data:
             cmds=["python", "-c"],
             arguments=[
                 "import os, sys; "
-                "d = __import__('datetime').date.today().isoformat(); "
+                # AIRFLOW_CTX_LOGICAL_DATE is set by Airflow: YYYY-MM-DDTHH:MM:SS+00:00
+                # Fall back to today if not running inside Airflow.
+                "raw = os.environ.get('AIRFLOW_CTX_LOGICAL_DATE', ''); "
+                "d = raw[:10] if raw else __import__('datetime').date.today().isoformat(); "
                 "bucket = os.environ.get('BATCH_S3_BUCKET', ''); "
                 "n = 0; "
                 "exts = ('.wav', '.mp3', '.flac'); "
