@@ -4,10 +4,13 @@ import os
 import sys
 from datetime import date
 
+from asr_system.config import get_settings
+
 raw = os.environ.get("AIRFLOW_CTX_LOGICAL_DATE", "")
 d = raw[:10] if raw else date.today().isoformat()
 
-bucket = os.environ.get("BATCH_S3_BUCKET", "")
+settings = get_settings()
+bucket = settings.s3.bucket
 exts = (".wav", ".mp3", ".flac")
 n = 0
 
@@ -16,12 +19,12 @@ if bucket:
 
     s3 = boto3.client(
         "s3",
-        aws_access_key_id=os.environ.get("BATCH_STORAGE_ACCESS_KEY"),
-        aws_secret_access_key=os.environ.get("BATCH_STORAGE_SECRET_KEY"),
-        endpoint_url=os.environ.get("BATCH_S3_ENDPOINT_URL") or None,
-        region_name=os.environ.get("BATCH_S3_REGION", "us-east-1"),
+        aws_access_key_id=settings.batch_secrets.storage_access_key,
+        aws_secret_access_key=settings.batch_secrets.storage_secret_key,
+        endpoint_url=settings.s3.endpoint_url or None,
+        region_name=settings.s3.region,
     )
-    prefix = os.environ.get("BATCH_S3_PREFIX", "recordings").rstrip("/") + "/" + d + "/"
+    prefix = settings.s3.prefix.rstrip("/") + "/" + d + "/"
     pages = s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix)
     n = sum(
         1
@@ -30,7 +33,7 @@ if bucket:
         if any(obj["Key"].endswith(e) for e in exts)
     )
 else:
-    inp = os.environ.get("BATCH_INPUT_DIR", "./data/input")
+    inp = settings.storage.input_dir
     day = os.path.join(inp, d)
     n = len([f for f in os.listdir(day) if f.endswith(exts)]) if os.path.isdir(day) else 0
 
