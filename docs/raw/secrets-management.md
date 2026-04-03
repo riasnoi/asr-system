@@ -5,8 +5,8 @@
 - No secrets in repository history.
 - Local development uses `.env` from `.env.example` (`VAULT_ENABLED=false`).
 - Production uses HashiCorp Vault via `VAULT_ENABLED=true`.
-- CI/CD uses `hashicorp/vault-action` to fetch secrets at workflow runtime.
-- Bootstrap Vault credentials are delivered to the server automatically by the deploy workflow.
+- GitHub Actions **не** подставляет прикладные секреты (`BATCH_*`, `ONLINE_*` и т.д.) из Vault в манифесты: их при старте читает приложение (и Airflow — своим Vault backend), используя только bootstrap **AppRole** из окружения пода.
+- Секрет Kubernetes `asr-vault-credentials` (`VAULT_ADDR`, `VAULT_ROLE_ID`, `VAULT_SECRET_ID`) создаётся **на кластере вручную** (шаблон: `deploy/k8s/base/secret.yaml`); workflow `deploy.yml` его сейчас не генерирует.
 
 ## Scope separation
 
@@ -36,10 +36,54 @@ Token auth is available as a fallback for development.
 
 ### How secrets reach the application
 
-1. `deploy.yml` reads `VAULT_ADDR`, `VAULT_ROLE_ID`, `VAULT_SECRET_ID` from GitHub Secrets.
-2. The deploy script generates `.env` on the server with only bootstrap credentials (no application secrets).
-3. Docker containers start and the Python config layer (`config.py` + `VaultSecretsProvider`) fetches application secrets from Vault at process startup.
-4. Airflow uses its native Vault Secrets Backend (`airflow-providers-hashicorp`) for connections and variables.
+1. В Kubernetes в namespace `asr-system` существует Secret **`asr-vault-credentials`** с `VAULT_ADDR`, `VAULT_ROLE_ID`, `VAULT_SECRET_ID` (и при необходимости другими ключами, которые ожидает образ). Pod’ы монтируют его через `envFrom` вместе с ConfigMap `asr-config` (`VAULT_ENABLED=true`, mount path и т.д.).
+2. При старте процесса `config.py` вызывает `VaultSecretsProvider`: по AppRole открывается KV `secret/data/asr-system/{app,batch,online}` и значения подмешиваются в настройки.
+3. Сценарий **docker-compose** (`scripts/deploy/deploy_remote.sh`): на диск пишется только `.env` с bootstrap Vault — прикладные ключи по-прежнему с Vault при старте контейнера.
+4. Airflow использует нативный Vault Secrets Backend (`airflow-providers-hashicorp`) для connections/variables.
+
+### Первичная настройка Vault и кластера (чеклист)
+
+**A. Vault (один раз, админом Vault)**
+
+1. Включить KV v2 на mount `secret` (или другой — тогда поправьте `VAULT_MOUNT_POINT` в ConfigMap).
+2. Создать данные под пути (префикс `asr-system` задаётся `VAULT_BASE_PATH` в ConfigMap):
+
+```bash
+# пример: приложение (DSN)
+vault kv put secret/asr-system/app DB_DSN="postgresql+psycopg2://user:pass@host:5432/asr"
+
+# batch: хранилище + при необходимости Triton (см. также раздел с vault kv patch ниже)
+vault kv put secret/asr-system/batch \
+  BATCH_STORAGE_ACCESS_KEY="..." \
+  BATCH_STORAGE_SECRET_KEY="..." \
+  BATCH_ASR_PROVIDER=remote \
+  BATCH_ASR_REMOTE_URL="http://<ML_IP>:30800" \
+  BATCH_EMOTION_PROVIDER=remote \
+  BATCH_EMOTION_REMOTE_URL="http://<ML_IP>:30800"
+
+vault kv put secret/asr-system/online ONLINE_API_TOKEN="..."
+
+# Airflow (если используете Vault для БД Airflow)
+vault kv put secret/asr-system/airflow POSTGRES_USER="..." POSTGRES_PASSWORD="..."
+```
+
+3. Создать **политику** с `read` на нужные пути (минимум `secret/data/asr-system/app`, `batch`, `online` — по роли сервиса).
+4. Создать **AppRole**, привязать политику; сохранить **`role_id`** и выпустить **`secret_id`** для подов.
+
+**B. Kubernetes**
+
+```bash
+kubectl -n asr-system create secret generic asr-vault-credentials \
+  --from-literal=VAULT_ADDR="https://vault.example.com:8200" \
+  --from-literal=VAULT_ROLE_ID="<role_id>" \
+  --from-literal=VAULT_SECRET_ID="<secret_id>"
+```
+
+Убедитесь, что с подов кластера **доступен** `VAULT_ADDR` (DNS, TLS, firewall).
+
+**C. CI/CD (GitHub)**
+
+В репозитории достаточно секретов для **SSH и GHCR** (`DEPLOY_HOST`, `GHCR_PAT`, …) — см. раздел выше. **Прикладные** ключи в GitHub Secrets **дублировать не обязательно**: они живут в Vault. После изменения данных в Vault новый запуск batch (новый pod) или перезапуск deployment подхватит значения без правки workflow.
 
 ### Vault policies (recommended)
 
@@ -66,6 +110,15 @@ path "secret/data/asr-system/registry" { capabilities = ["read"] }
 - `REMOTE_APP_DIR`
 - `GHCR_PAT` — Personal Access Token with `read:packages` scope (for K8s image pull)
 
+### Triton / ML server (optional, separate from main K8s deploy)
+
+Workflow: `.github/workflows/deploy-triton.yml` (only **workflow_dispatch** — pushes to the repo do not run it).
+
+- `TRITON_DEPLOY_HOST` — SSH host of the GPU / Triton machine (can match `DEPLOY_HOST` if the same box).
+- `TRITON_DEPLOY_USER`
+- `TRITON_DEPLOY_SSH_KEY`
+- `TRITON_REMOTE_APP_DIR` — same idea as `REMOTE_APP_DIR` (directory where `deploy/triton` and `scripts/deploy/` are uploaded).
+
 ## Local setup
 
 ```bash
@@ -76,6 +129,24 @@ With `VAULT_ENABLED=false` (default), set values directly in `.env`:
 - `BATCH_STORAGE_ACCESS_KEY`
 - `BATCH_STORAGE_SECRET_KEY`
 - `ONLINE_API_TOKEN`
+- при работе batch через удалённый Triton: `BATCH_ASR_PROVIDER`, `BATCH_ASR_REMOTE_URL`, `BATCH_EMOTION_PROVIDER`, `BATCH_EMOTION_REMOTE_URL` (см. `.env.example`)
+
+### Пример: batch → Triton на отдельном сервере (KV `asr-system/batch`)
+
+Адрес ML-сервера храните в том же секрете `batch/`, что и ключи S3 — приложение читает scope `batch` целиком при старте.
+
+```bash
+# подставьте IP/порт (K8s NodePort обычно 30800; docker compose на ML — 8000)
+ML_URL="http://<ML_SERVER_IP>:30800"
+
+vault kv patch secret/asr-system/batch \
+  BATCH_ASR_PROVIDER=remote \
+  BATCH_ASR_REMOTE_URL="${ML_URL}" \
+  BATCH_EMOTION_PROVIDER=remote \
+  BATCH_EMOTION_REMOTE_URL="${ML_URL}"
+```
+
+Если `vault kv patch` недоступен, обновите ключи через UI Vault или `vault kv get` / `vault kv put` с полным набором полей секрета `batch` (осторожно: `put` перезаписывает все ключи версии).
 
 To test Vault locally, start a dev server:
 

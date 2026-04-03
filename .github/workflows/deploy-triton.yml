@@ -1,0 +1,99 @@
+name: Deploy Triton (ML server)
+
+# Запуск только вручную: обычные пуши в репозиторий не трогают Triton и не перезапускают поды.
+# Повторный apply с тем же Deployment не вызывает rollout; поды остаются с загруженными моделями.
+on:
+  workflow_dispatch:
+    inputs:
+      sync_model_repository:
+        description: "Скопировать deploy/triton/model_repository в под (первый раз или после смены model.py / config.pbtxt)"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build-push:
+    name: Build & push Triton image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags && steps.image.outputs.value }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/triton-asr
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: deploy/triton
+          file: deploy/triton/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/triton-asr:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/triton-asr:buildcache,mode=max
+
+      - name: Export image ref
+        id: image
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "value=ghcr.io/${{ github.repository_owner }}/triton-asr:sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+  upload:
+    name: Upload Triton bundle
+    runs-on: ubuntu-latest
+    needs: build-push
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload manifests, model_repository, deploy script
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.TRITON_DEPLOY_HOST }}
+          username: ${{ secrets.TRITON_DEPLOY_USER }}
+          key: ${{ secrets.TRITON_DEPLOY_SSH_KEY }}
+          source: "deploy/triton,scripts/deploy/triton_k8s_deploy.sh"
+          target: ${{ secrets.TRITON_REMOTE_APP_DIR }}
+          strip_components: 0
+          overwrite: true
+
+  apply:
+    name: kubectl apply (no forced restart)
+    runs-on: ubuntu-latest
+    needs: [build-push, upload]
+    steps:
+      - name: Apply manifests
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TRITON_REMOTE_APP_DIR: ${{ secrets.TRITON_REMOTE_APP_DIR }}
+          TRITON_IMAGE: ${{ needs.build-push.outputs.image }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PAT }}
+          SYNC_MODEL_REPOSITORY: ${{ github.event.inputs.sync_model_repository || 'false' }}
+        with:
+          host: ${{ secrets.TRITON_DEPLOY_HOST }}
+          username: ${{ secrets.TRITON_DEPLOY_USER }}
+          key: ${{ secrets.TRITON_DEPLOY_SSH_KEY }}
+          envs: TRITON_REMOTE_APP_DIR,TRITON_IMAGE,GHCR_USERNAME,GHCR_TOKEN,SYNC_MODEL_REPOSITORY
+          script: |
+            chmod +x "${TRITON_REMOTE_APP_DIR}/scripts/deploy/triton_k8s_deploy.sh"
+            "${TRITON_REMOTE_APP_DIR}/scripts/deploy/triton_k8s_deploy.sh"

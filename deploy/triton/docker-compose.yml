@@ -3,12 +3,18 @@ services:
     image: nvcr.io/nvidia/tritonserver:24.08-py3
     container_name: triton
     restart: unless-stopped
+    environment:
+      # Кэш на именованном томе (не в слое контейнера): compose down/up без повторной загрузки весов
+      HF_HOME: /models/hf_cache
+      HF_HUB_CACHE: /models/hf_cache/hub
+      TRANSFORMERS_CACHE: /models/hf_cache/transformers
     ports:
       - "8000:8000"
       - "8001:8001"
       - "8002:8002"
     volumes:
       - ./model_repository:/models
+      - triton-hf-cache:/models/hf_cache
     command: tritonserver --model-repository=/models --log-verbose=1
     deploy:
       resources:
@@ -18,5 +24,8 @@ services:
               count: 1
               capabilities: [gpu]
     # For CPU-only, remove the deploy section and add:
-    # environment:
-    #   - NVIDIA_VISIBLE_DEVICES=void
+    #   NVIDIA_VISIBLE_DEVICES: void
+    # (merge with the HF_* environment block above)
+
+volumes:
+  triton-hf-cache:

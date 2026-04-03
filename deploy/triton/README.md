@@ -9,6 +9,19 @@
 - NVIDIA Driver 535+
 - Docker + NVIDIA Container Toolkit **или** k3s + NVIDIA GPU Operator
 
+## CI/CD (GitHub Actions)
+
+Workflow **Deploy Triton (ML server)** (`.github/workflows/deploy-triton.yml`) запускается **только вручную** (Actions → Run workflow). Обычные пуши в репозиторий его не вызывают, поэтому поды Triton и загруженные веса не перезапускаются из‑за коммитов в код приложения.
+
+На сервере нужны те же GitHub Secrets, что и для основного деплоя, но с префиксом `TRITON_*` (см. `docs/raw/secrets-management.md`). Скрипт делает `kubectl apply` **без** `rollout restart`: новый rollout случится только если изменился spec Deployment (образ, ресурсы, пробы и т.д.).
+
+Параметр **sync model repository**:
+
+- **выключен (по умолчанию)** — обновляются только файлы на диске сервера и манифесты; если YAML не менялся, поды остаются как были.
+- **включить** — после apply выполняется `kubectl cp` каталога `model_repository` в `/models` в поде (первый вывод в строй или обновление `model.py` / `config.pbtxt`). При смене Python backend может понадобиться перезагрузка модели в Triton вручную.
+
+Первый раз имеет смысл запустить workflow с **sync model repository = true**, чтобы скопировать backend-файлы в PVC.
+
 ## Вариант 1: K8s (k3s)
 
 ### 1. Установить k3s
@@ -103,26 +116,18 @@ curl http://localhost:8000/v2/models
 
 ## Подключение к ASR-системе
 
-На основном сервере (Сервер 1) обновите ConfigMap с IP ML-сервера:
+В **production** (`VAULT_ENABLED=true`, как в `deploy/k8s/base/configmap.yaml`) приложение подставляет batch-настройки из **Vault**, а не из ConfigMap. ConfigMap `asr-config` хранит в основном несекретное окружение и параметры доступа к Vault; URL Triton туда класть не нужно.
 
-```bash
-kubectl -n asr-system edit configmap asr-config
-```
+Добавьте или обновите ключи в **`secret/data/asr-system/batch`** (см. пример команд в `docs/raw/secrets-management.md`):
 
-Замените `TRITON_SERVER_IP` на реальный IP:
+- `BATCH_ASR_PROVIDER=remote`
+- `BATCH_ASR_REMOTE_URL=http://<ML_SERVER_IP>:30800` (или `:8000` для Docker Compose без NodePort)
+- `BATCH_EMOTION_PROVIDER=remote`
+- `BATCH_EMOTION_REMOTE_URL` — тот же базовый URL, что и для ASR
 
-```yaml
-BATCH_ASR_PROVIDER: "remote"
-BATCH_ASR_REMOTE_URL: "http://<ML_SERVER_IP>:30800"
-BATCH_EMOTION_PROVIDER: "remote"
-BATCH_EMOTION_REMOTE_URL: "http://<ML_SERVER_IP>:30800"
-```
+После смены значений в Vault **новый** batch-pod (например, следующий запуск **CronJob**) подхватит их сам. Перезапуск `asr-online` для этого не требуется, если online-сервис не ходит в Triton.
 
-Перезапустите batch-поды:
-
-```bash
-kubectl -n asr-system rollout restart deployment/asr-online
-```
+Локально (`VAULT_ENABLED=false`) те же переменные задаются в **`.env`** рядом с `BATCH_STORAGE_*`.
 
 ## Тестирование inference
 
