@@ -1,26 +1,31 @@
 """Nightly ASR batch DAG.
 
-Uses PythonOperator + the kubernetes Python client (bundled with every
-Airflow installation) to create and track a K8s Job — no extra providers
-required.  Tasks are chained linearly:
+Uses KubernetesPodOperator to run each pipeline stage in an isolated pod.
+Logs are streamed back to Airflow in real time and stored on a persistent
+volume so they survive scheduler pod restarts.
 
-  validate_input  →  trigger_batch_job  →  wait_for_completion  →  report_summary
+Pipeline:
+  validate_input → run_batch_pipeline → verify_results → report_summary
 """
 
 from __future__ import annotations
 
-import time
-import uuid
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
+from kubernetes.client import (
+    V1ConfigMapEnvSource,
+    V1EnvFromSource,
+    V1LocalObjectReference,
+    V1PersistentVolumeClaimVolumeSource,
+    V1SecretEnvSource,
+    V1Volume,
+    V1VolumeMount,
+)
 
 NAMESPACE = "asr-system"
-# Replaced at deploy time by k8s_deploy.sh (same sed pass as other images).
 BATCH_IMAGE = "asr-batch:placeholder"
-JOB_POLL_INTERVAL = 30  # seconds between status checks
-JOB_TIMEOUT = 6 * 3600  # 6 h hard limit
 
 default_args = {
     "owner": "ml-platform",
@@ -29,119 +34,31 @@ default_args = {
     "retry_delay": timedelta(minutes=15),
 }
 
+_ENV_FROM = [
+    V1EnvFromSource(config_map_ref=V1ConfigMapEnvSource(name="asr-config")),
+    V1EnvFromSource(secret_ref=V1SecretEnvSource(name="asr-vault-credentials")),
+]
 
-# ---------------------------------------------------------------------------
-# Task functions
-# ---------------------------------------------------------------------------
+_DATA_VOLUME = V1Volume(
+    name="data",
+    persistent_volume_claim=V1PersistentVolumeClaimVolumeSource(claim_name="asr-data-pvc"),
+)
 
+_DATA_MOUNT = V1VolumeMount(name="data", mount_path="/app/data")
 
-def _validate_input(ds: str, **_):
-    """Sanity-check that the execution date is reasonable."""
-    run_date = datetime.strptime(ds, "%Y-%m-%d").date()
-    today = datetime.utcnow().date()
-    lag = (today - run_date).days
-    if lag > 7:
-        raise ValueError(f"Target date {ds} is more than 7 days in the past ({lag}d)")
-    print(f"validate: target_date={ds}, lag={lag}d — OK")
+_PULL_SECRETS = [V1LocalObjectReference(name="ghcr-pull-secret")]
 
+_COMMON = dict(
+    namespace=NAMESPACE,
+    image=BATCH_IMAGE,
+    env_from=_ENV_FROM,
+    volumes=[_DATA_VOLUME],
+    volume_mounts=[_DATA_MOUNT],
+    image_pull_secrets=_PULL_SECRETS,
+    is_delete_operator_pod=True,
+    get_logs=True,
+)
 
-def _trigger_batch_job(ds: str, ds_nodash: str, ti, **_):
-    """Create a one-off Kubernetes Job that runs the batch pipeline."""
-    from kubernetes import client, config  # noqa: PLC0415
-
-    config.load_incluster_config()
-    batch_v1 = client.BatchV1Api()
-
-    job_name = f"asr-batch-{ds_nodash}-{uuid.uuid4().hex[:6]}"
-
-    job = client.V1Job(
-        metadata=client.V1ObjectMeta(
-            name=job_name,
-            namespace=NAMESPACE,
-            labels={"app": "asr-batch", "run-date": ds},
-        ),
-        spec=client.V1JobSpec(
-            backoff_limit=2,
-            ttl_seconds_after_finished=86400,
-            template=client.V1PodTemplateSpec(
-                spec=client.V1PodSpec(
-                    restart_policy="OnFailure",
-                    image_pull_secrets=[client.V1LocalObjectReference(name="ghcr-pull-secret")],
-                    containers=[
-                        client.V1Container(
-                            name="batch",
-                            image=BATCH_IMAGE,
-                            env_from=[
-                                client.V1EnvFromSource(
-                                    config_map_ref=client.V1ConfigMapEnvSource(name="asr-config")
-                                ),
-                                client.V1EnvFromSource(
-                                    secret_ref=client.V1SecretEnvSource(
-                                        name="asr-vault-credentials"
-                                    )
-                                ),
-                            ],
-                            volume_mounts=[
-                                client.V1VolumeMount(name="data", mount_path="/app/data")
-                            ],
-                        )
-                    ],
-                    volumes=[
-                        client.V1Volume(
-                            name="data",
-                            persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
-                                claim_name="asr-data-pvc"
-                            ),
-                        )
-                    ],
-                )
-            ),
-        ),
-    )
-
-    batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job)
-    ti.xcom_push(key="job_name", value=job_name)
-    print(f"trigger: job '{job_name}' created for {ds}")
-
-
-def _wait_for_completion(ti, **_):
-    """Poll the Job until it succeeds or exhausts retries."""
-    from kubernetes import client, config  # noqa: PLC0415
-
-    config.load_incluster_config()
-    batch_v1 = client.BatchV1Api()
-
-    job_name = ti.xcom_pull(key="job_name", task_ids="trigger_batch_job")
-    deadline = time.monotonic() + JOB_TIMEOUT
-
-    while time.monotonic() < deadline:
-        job = batch_v1.read_namespaced_job(name=job_name, namespace=NAMESPACE)
-        status = job.status
-
-        if status.succeeded and status.succeeded >= 1:
-            print(f"wait: job '{job_name}' succeeded")
-            return
-
-        if status.failed and status.failed > 2:
-            raise RuntimeError(f"Job '{job_name}' failed {status.failed} times — aborting")
-
-        active = status.active or 0
-        failed = status.failed or 0
-        print(f"wait: job '{job_name}' still running (active={active}, failed={failed})")
-        time.sleep(JOB_POLL_INTERVAL)
-
-    raise TimeoutError(f"Job '{job_name}' did not finish within {JOB_TIMEOUT}s")
-
-
-def _report_summary(ds: str, ti, **_):
-    """Log a short completion summary."""
-    job_name = ti.xcom_pull(key="job_name", task_ids="trigger_batch_job")
-    print(f"summary: batch job '{job_name}' completed for {ds}")
-
-
-# ---------------------------------------------------------------------------
-# DAG definition
-# ---------------------------------------------------------------------------
 
 with DAG(
     dag_id="nightly_asr_batch",
@@ -154,26 +71,63 @@ with DAG(
     tags=["asr", "batch", "nightly"],
 ) as dag:
 
-    validate_input = PythonOperator(
+    validate_input = KubernetesPodOperator(
         task_id="validate_input",
-        python_callable=_validate_input,
+        name="asr-validate-input",
+        cmds=["python", "-c"],
+        arguments=[
+            "import os, sys; "
+            "d = __import__('datetime').date.today().isoformat(); "
+            "inp = os.environ.get('BATCH_INPUT_DIR', './data/input'); "
+            "day = os.path.join(inp, d); "
+            "n = len([f for f in os.listdir(day) if f.endswith(('.wav','.mp3','.flac'))]) "
+            "if os.path.isdir(day) else 0; "
+            "print(f'validate: {n} recordings for {d}'); "
+            "sys.exit(0 if n else 1)"
+        ],
+        execution_timeout=timedelta(minutes=5),
+        **_COMMON,
     )
 
-    trigger_batch_job = PythonOperator(
-        task_id="trigger_batch_job",
-        python_callable=_trigger_batch_job,
-    )
-
-    wait_for_completion = PythonOperator(
-        task_id="wait_for_completion",
-        python_callable=_wait_for_completion,
-        execution_timeout=timedelta(hours=7),
+    run_batch_pipeline = KubernetesPodOperator(
+        task_id="run_batch_pipeline",
+        name="asr-batch-run",
+        cmds=["python", "services/batch/main.py"],
+        execution_timeout=timedelta(hours=6),
         sla=timedelta(hours=8),
+        **_COMMON,
     )
 
-    report_summary = PythonOperator(
+    verify_results = KubernetesPodOperator(
+        task_id="verify_results",
+        name="asr-verify-results",
+        cmds=["python", "-c"],
+        arguments=[
+            "import os, sys; "
+            "out = os.environ.get('BATCH_OUTPUT_DIR', './data/output'); "
+            "scores = os.path.join(out, 'call_scores.jsonl'); "
+            "ok = os.path.isfile(scores) and os.path.getsize(scores) > 0; "
+            "print(f'verify: {scores} ok={ok}'); "
+            "sys.exit(0 if ok else 1)"
+        ],
+        execution_timeout=timedelta(minutes=5),
+        **_COMMON,
+    )
+
+    report_summary = KubernetesPodOperator(
         task_id="report_summary",
-        python_callable=_report_summary,
+        name="asr-report",
+        cmds=["python", "-c"],
+        arguments=[
+            "import os, json; "
+            "out = os.environ.get('BATCH_OUTPUT_DIR', './data/output'); "
+            "path = os.path.join(out, 'call_scores.jsonl'); "
+            "scores = [json.loads(l) for l in open(path)]; "
+            "avg = sum(s.get('overall_score', 0) for s in scores) / max(len(scores), 1); "
+            "print(f'summary: {len(scores)} calls, avg_score={avg:.2f}')"
+        ],
+        execution_timeout=timedelta(minutes=5),
+        **_COMMON,
     )
 
-    validate_input >> trigger_batch_job >> wait_for_completion >> report_summary
+    validate_input >> run_batch_pipeline >> verify_results >> report_summary

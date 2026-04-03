@@ -15,6 +15,7 @@ resources:
   - ingress.yaml
   - batch-cronjob.yaml
   # Airflow
+  - airflow-logs-pvc.yaml
   - airflow-rbac.yaml
   - airflow-configmap.yaml
   - airflow-dags-configmap.yaml

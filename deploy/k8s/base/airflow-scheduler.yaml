@@ -42,7 +42,12 @@ spec:
             - name: dags
               mountPath: /opt/airflow/dags/nightly_batch.py
               subPath: nightly_batch.py
+            - name: logs
+              mountPath: /opt/airflow/logs
       volumes:
         - name: dags
           configMap:
             name: airflow-dags
+        - name: logs
+          persistentVolumeClaim:
+            claimName: airflow-logs-pvc
