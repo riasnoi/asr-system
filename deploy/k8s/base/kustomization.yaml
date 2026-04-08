@@ -24,13 +24,5 @@ resources:
   - airflow-webserver.yaml
   - airflow-scheduler.yaml
 
-images:
-  - name: asr-online
-    newName: asr-online
-    newTag: placeholder
-  - name: asr-batch
-    newName: asr-batch
-    newTag: placeholder
-  - name: asr-airflow
-    newName: asr-airflow
-    newTag: placeholder
+# Image substitution is handled by sed in scripts/deploy/k8s_deploy.sh,
+# which replaces *:placeholder tags in both pod specs and ConfigMap data.
