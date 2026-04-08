@@ -15,7 +15,7 @@ _CEDR_LABEL_MAP = {
     "joy": "positive",
     "sadness": "sad",
     "anger": "angry",
-    "fear": "sad",       # closest negative without dedicated category
+    "fear": "sad",  # closest negative without dedicated category
     "surprise": "neutral",
 }
 
