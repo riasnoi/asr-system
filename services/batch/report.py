@@ -22,8 +22,12 @@ client = boto3.client(
     region_name=settings.s3.region,
 )
 
-body = client.get_object(Bucket=settings.s3.bucket, Key=key)["Body"].read().decode()
-scores = [json.loads(line) for line in body.strip().splitlines() if line.strip()]
+try:
+    body = client.get_object(Bucket=settings.s3.bucket, Key=key)["Body"].read().decode()
+    scores = [json.loads(line) for line in body.strip().splitlines() if line.strip()]
+except client.exceptions.NoSuchKey:
+    scores = []
+    print(f"no results file at s3://{settings.s3.bucket}/{key} — nothing was processed")
 
 n = len(scores)
 avg = sum(s.get("overall_score", 0) for s in scores) / max(n, 1)
