@@ -42,11 +42,16 @@ CREATE TABLE IF NOT EXISTS call_scores (
 );
 
 -- Migration: add new columns to existing tables that predate this schema version.
-ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS overall_score          DOUBLE PRECISION NOT NULL DEFAULT 0;
-ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS client_satisfaction    DOUBLE PRECISION NOT NULL DEFAULT 0;
-ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS operator_quality       DOUBLE PRECISION NOT NULL DEFAULT 0;
-ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS talk_ratio_operator    DOUBLE PRECISION NOT NULL DEFAULT 0.5;
-ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS total_duration_seconds DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE call_scores
+    ADD COLUMN IF NOT EXISTS overall_score DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE call_scores
+    ADD COLUMN IF NOT EXISTS client_satisfaction DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE call_scores
+    ADD COLUMN IF NOT EXISTS operator_quality DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE call_scores
+    ADD COLUMN IF NOT EXISTS talk_ratio_operator DOUBLE PRECISION NOT NULL DEFAULT 0.5;
+ALTER TABLE call_scores
+    ADD COLUMN IF NOT EXISTS total_duration_seconds DOUBLE PRECISION NOT NULL DEFAULT 0;
 """
 
 

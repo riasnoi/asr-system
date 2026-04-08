@@ -25,8 +25,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 from prometheus_fastapi_instrumentator import Instrumentator
 
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
-
 from asr_system.application.use_cases.get_call_card import GetCallCardUseCase
 from asr_system.application.use_cases.list_calls import ListCallsUseCase
 from asr_system.application.use_cases.process_call import ProcessCallUseCase
@@ -38,6 +36,8 @@ from asr_system.infrastructure.factory import (
     create_repository_adapters,
     create_speaker_adapter,
 )
+
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 logger = logging.getLogger(__name__)
 
