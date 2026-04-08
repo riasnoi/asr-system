@@ -1,0 +1,54 @@
+name: Sync DAGs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dags/**"
+      - "deploy/k8s/base/airflow-dags-configmap.yaml"
+
+jobs:
+  sync:
+    name: Apply DAG ConfigMap
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload updated ConfigMap
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "deploy/k8s/base/airflow-dags-configmap.yaml"
+          target: ${{ secrets.REMOTE_APP_DIR }}
+          strip_components: 0
+          overwrite: true
+
+      - name: Apply ConfigMap and restart scheduler
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          REMOTE_APP_DIR: ${{ secrets.REMOTE_APP_DIR }}
+          NAMESPACE: asr-system
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: REMOTE_APP_DIR,NAMESPACE
+          script: |
+            export KUBECONFIG="${HOME}/.kube/config"
+            CM_FILE="${REMOTE_APP_DIR}/deploy/k8s/base/airflow-dags-configmap.yaml"
+
+            # Use the currently deployed batch image — no rebuild needed
+            BATCH_IMAGE=$(kubectl get cronjob -n "${NAMESPACE}" \
+              -o jsonpath='{.items[0].spec.jobTemplate.spec.template.spec.containers[0].image}' \
+              2>/dev/null || echo "asr-batch:placeholder")
+
+            echo "Applying DAG ConfigMap with image: ${BATCH_IMAGE}"
+            sed "s|asr-batch:placeholder|${BATCH_IMAGE}|g" "${CM_FILE}" \
+              | kubectl apply -f -
+
+            kubectl -n "${NAMESPACE}" rollout restart deployment/airflow-scheduler
+            kubectl -n "${NAMESPACE}" rollout status deployment/airflow-scheduler --timeout=120s
+            echo "DAG sync complete"
