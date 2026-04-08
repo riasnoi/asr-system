@@ -92,25 +92,7 @@ with DAG(
     verify_results = KubernetesPodOperator(
         task_id="verify_results",
         name="asr-verify-results",
-        cmds=["python", "-c"],
-        arguments=[
-            "import os, sys, boto3; "
-            "from asr_system.config import get_settings; "
-            "from datetime import date; "
-            "s = get_settings(); "
-            "raw = os.environ.get('AIRFLOW_CTX_LOGICAL_DATE') or ''; "
-            "d = raw[:10] or date.today().isoformat(); "
-            "key = f'results/{d}/call_scores.jsonl'; "
-            "client = boto3.client('s3', "
-            "  aws_access_key_id=s.batch_secrets.storage_access_key, "
-            "  aws_secret_access_key=s.batch_secrets.storage_secret_key, "
-            "  endpoint_url=s.s3.endpoint_url or None, "
-            "  region_name=s.s3.region); "
-            "try: ok = client.head_object(Bucket=s.s3.bucket, Key=key)['ContentLength'] > 0\n"
-            "except Exception as e: ok = False; print(f'error: {e}')\n"
-            "print(f'verify s3://{s.s3.bucket}/{key} ok={ok}'); "
-            "sys.exit(0 if ok else 1)"
-        ],
+        cmds=["python", "services/batch/verify.py"],
         execution_timeout=timedelta(minutes=5),
         **_COMMON,
     )
@@ -118,25 +100,7 @@ with DAG(
     report_summary = KubernetesPodOperator(
         task_id="report_summary",
         name="asr-report",
-        cmds=["python", "-c"],
-        arguments=[
-            "import os, json, boto3; "
-            "from asr_system.config import get_settings; "
-            "from datetime import date; "
-            "s = get_settings(); "
-            "raw = os.environ.get('AIRFLOW_CTX_LOGICAL_DATE') or ''; "
-            "d = raw[:10] or date.today().isoformat(); "
-            "key = f'results/{d}/call_scores.jsonl'; "
-            "client = boto3.client('s3', "
-            "  aws_access_key_id=s.batch_secrets.storage_access_key, "
-            "  aws_secret_access_key=s.batch_secrets.storage_secret_key, "
-            "  endpoint_url=s.s3.endpoint_url or None, "
-            "  region_name=s.s3.region); "
-            "body = client.get_object(Bucket=s.s3.bucket, Key=key)['Body'].read().decode(); "
-            "scores = [json.loads(l) for l in body.strip().splitlines() if l.strip()]; "
-            "n = len(scores); avg = sum(sc.get('overall_score', 0) for sc in scores) / max(n, 1); "
-            "print(f'summary: {n} calls processed, avg_score={avg:.1f}')"
-        ],
+        cmds=["python", "services/batch/report.py"],
         execution_timeout=timedelta(minutes=5),
         **_COMMON,
     )

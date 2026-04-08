@@ -1,6 +1,42 @@
 apiVersion: v1
 data:
-  nightly_batch.py: "\"\"\"Nightly ASR batch DAG.\n\nUses KubernetesPodOperator to run each pipeline stage in an isolated pod.\nLogs are streamed back to Airflow in real time and stored on a persistent\nvolume so they survive scheduler pod restarts.\n\nPipeline:\n  validate_input → run_batch_pipeline → verify_results → report_summary\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom datetime import datetime, timedelta\n\nfrom airflow import DAG\nfrom airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator\nfrom kubernetes.client import (\n    V1ConfigMapEnvSource,\n    V1EmptyDirVolumeSource,\n    V1EnvFromSource,\n    V1LocalObjectReference,\n    V1SecretEnvSource,\n    V1Volume,\n    V1VolumeMount,\n)\n\nNAMESPACE = \"asr-system\"\nBATCH_IMAGE = \"asr-batch:placeholder\"\n\ndefault_args = {\n    \"owner\": \"ml-platform\",\n    \"depends_on_past\": False,\n    \"retries\": 1,\n    \"retry_delay\": timedelta(minutes=15),\n}\n\n_ENV_FROM = [\n    V1EnvFromSource(config_map_ref=V1ConfigMapEnvSource(name=\"asr-config\")),\n    V1EnvFromSource(secret_ref=V1SecretEnvSource(name=\"asr-vault-credentials\")),\n]\n\n_PULL_SECRETS = [V1LocalObjectReference(name=\"ghcr-pull-secret\")]\n\n\n_SCRATCH_VOLUME = V1Volume(name=\"data\", empty_dir=V1EmptyDirVolumeSource())\n_SCRATCH_MOUNT = V1VolumeMount(name=\"data\", mount_path=\"/app/data\")\n\n_COMMON = dict(\n    namespace=NAMESPACE,\n    image=BATCH_IMAGE,\n    env_from=_ENV_FROM,\n    image_pull_secrets=_PULL_SECRETS,\n    is_delete_operator_pod=True,\n    get_logs=True,\n)\n\n_COMMON_WITH_SCRATCH = dict(\n    **_COMMON,\n    volumes=[_SCRATCH_VOLUME],\n    volume_mounts=[_SCRATCH_MOUNT],\n)\n\n\nwith DAG(\n    dag_id=\"nightly_asr_batch\",\n    description=\"Nightly processing of call-center recordings\",\n    default_args=default_args,\n    schedule=\"0 0 * * *\",\n    start_date=datetime(2026, 1, 1),\n    catchup=False,\n    max_active_runs=1,\n    tags=[\"asr\", \"batch\", \"nightly\"],\n) as dag:\n\n    validate_input = KubernetesPodOperator(\n        task_id=\"validate_input\",\n        name=\"asr-validate-input\",\n        cmds=[\"python\", \"services/batch/validate.py\"],\n        execution_timeout=timedelta(minutes=5),\n        **_COMMON,\n    )\n\n    run_batch_pipeline = KubernetesPodOperator(\n        task_id=\"run_batch_pipeline\",\n        name=\"asr-batch-run\",\n        cmds=[\"python\", \"services/batch/main.py\"],\n        execution_timeout=timedelta(hours=6),\n        sla=timedelta(hours=8),\n        **_COMMON_WITH_SCRATCH,\n    )\n\n    verify_results = KubernetesPodOperator(\n        task_id=\"verify_results\",\n        name=\"asr-verify-results\",\n        cmds=[\"python\", \"-c\"],\n        arguments=[\n            \"import os, sys, boto3; \"\n            \"from asr_system.config import get_settings; \"\n            \"from datetime import date; \"\n            \"s = get_settings(); \"\n            \"raw = os.environ.get('AIRFLOW_CTX_LOGICAL_DATE') or ''; \"\n            \"d = raw[:10] or date.today().isoformat(); \"\n            \"key = f'results/{d}/call_scores.jsonl'; \"\n            \"client = boto3.client('s3', \"\n            \"  aws_access_key_id=s.batch_secrets.storage_access_key, \"\n            \"  aws_secret_access_key=s.batch_secrets.storage_secret_key, \"\n            \"  endpoint_url=s.s3.endpoint_url or None, \"\n            \"  region_name=s.s3.region); \"\n            \"try: ok = client.head_object(Bucket=s.s3.bucket, Key=key)['ContentLength'] > 0\\n\"\n            \"except Exception as e: ok = False; print(f'error: {e}')\\n\"\n            \"print(f'verify s3://{s.s3.bucket}/{key} ok={ok}'); \"\n            \"sys.exit(0 if ok else 1)\"\n        ],\n        execution_timeout=timedelta(minutes=5),\n        **_COMMON,\n    )\n\n    report_summary = KubernetesPodOperator(\n        task_id=\"report_summary\",\n        name=\"asr-report\",\n        cmds=[\"python\", \"-c\"],\n        arguments=[\n            \"import os, json, boto3; \"\n            \"from asr_system.config import get_settings; \"\n            \"from datetime import date; \"\n            \"s = get_settings(); \"\n            \"raw = os.environ.get('AIRFLOW_CTX_LOGICAL_DATE') or ''; \"\n            \"d = raw[:10] or date.today().isoformat(); \"\n            \"key = f'results/{d}/call_scores.jsonl'; \"\n            \"client = boto3.client('s3', \"\n            \"  aws_access_key_id=s.batch_secrets.storage_access_key, \"\n            \"  aws_secret_access_key=s.batch_secrets.storage_secret_key, \"\n            \"  endpoint_url=s.s3.endpoint_url or None, \"\n            \"  region_name=s.s3.region); \"\n            \"body = client.get_object(Bucket=s.s3.bucket, Key=key)['Body'].read().decode(); \"\n            \"scores = [json.loads(l) for l in body.strip().splitlines() if l.strip()]; \"\n            \"n = len(scores); avg = sum(sc.get('overall_score', 0) for sc in scores) / max(n, 1); \"\n            \"print(f'summary: {n} calls processed, avg_score={avg:.1f}')\"\n        ],\n        execution_timeout=timedelta(minutes=5),\n        **_COMMON,\n    )\n\n    validate_input >> run_batch_pipeline >> verify_results >> report_summary\n"
+  nightly_batch.py: "\"\"\"Nightly ASR batch DAG.\n\nUses KubernetesPodOperator to\
+    \ run each pipeline stage in an isolated pod.\nLogs are streamed back to Airflow\
+    \ in real time and stored on a persistent\nvolume so they survive scheduler pod\
+    \ restarts.\n\nPipeline:\n  validate_input → run_batch_pipeline → verify_results\
+    \ → report_summary\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom datetime\
+    \ import datetime, timedelta\n\nfrom airflow import DAG\nfrom airflow.providers.cncf.kubernetes.operators.pod\
+    \ import KubernetesPodOperator\nfrom kubernetes.client import (\n    V1ConfigMapEnvSource,\n\
+    \    V1EmptyDirVolumeSource,\n    V1EnvFromSource,\n    V1LocalObjectReference,\n\
+    \    V1SecretEnvSource,\n    V1Volume,\n    V1VolumeMount,\n)\n\nNAMESPACE = \"\
+    asr-system\"\nBATCH_IMAGE = \"asr-batch:placeholder\"\n\ndefault_args = {\n  \
+    \  \"owner\": \"ml-platform\",\n    \"depends_on_past\": False,\n    \"retries\"\
+    : 1,\n    \"retry_delay\": timedelta(minutes=15),\n}\n\n_ENV_FROM = [\n    V1EnvFromSource(config_map_ref=V1ConfigMapEnvSource(name=\"\
+    asr-config\")),\n    V1EnvFromSource(secret_ref=V1SecretEnvSource(name=\"asr-vault-credentials\"\
+    )),\n]\n\n_PULL_SECRETS = [V1LocalObjectReference(name=\"ghcr-pull-secret\")]\n\
+    \n\n_SCRATCH_VOLUME = V1Volume(name=\"data\", empty_dir=V1EmptyDirVolumeSource())\n\
+    _SCRATCH_MOUNT = V1VolumeMount(name=\"data\", mount_path=\"/app/data\")\n\n_COMMON\
+    \ = dict(\n    namespace=NAMESPACE,\n    image=BATCH_IMAGE,\n    env_from=_ENV_FROM,\n\
+    \    image_pull_secrets=_PULL_SECRETS,\n    is_delete_operator_pod=True,\n   \
+    \ get_logs=True,\n)\n\n_COMMON_WITH_SCRATCH = dict(\n    **_COMMON,\n    volumes=[_SCRATCH_VOLUME],\n\
+    \    volume_mounts=[_SCRATCH_MOUNT],\n)\n\n\nwith DAG(\n    dag_id=\"nightly_asr_batch\"\
+    ,\n    description=\"Nightly processing of call-center recordings\",\n    default_args=default_args,\n\
+    \    schedule=\"0 0 * * *\",\n    start_date=datetime(2026, 1, 1),\n    catchup=False,\n\
+    \    max_active_runs=1,\n    tags=[\"asr\", \"batch\", \"nightly\"],\n) as dag:\n\
+    \n    validate_input = KubernetesPodOperator(\n        task_id=\"validate_input\"\
+    ,\n        name=\"asr-validate-input\",\n        cmds=[\"python\", \"services/batch/validate.py\"\
+    ],\n        execution_timeout=timedelta(minutes=5),\n        **_COMMON,\n    )\n\
+    \n    run_batch_pipeline = KubernetesPodOperator(\n        task_id=\"run_batch_pipeline\"\
+    ,\n        name=\"asr-batch-run\",\n        cmds=[\"python\", \"services/batch/main.py\"\
+    ],\n        execution_timeout=timedelta(hours=6),\n        sla=timedelta(hours=8),\n\
+    \        **_COMMON_WITH_SCRATCH,\n    )\n\n    verify_results = KubernetesPodOperator(\n\
+    \        task_id=\"verify_results\",\n        name=\"asr-verify-results\",\n \
+    \       cmds=[\"python\", \"services/batch/verify.py\"],\n        execution_timeout=timedelta(minutes=5),\n\
+    \        **_COMMON,\n    )\n\n    report_summary = KubernetesPodOperator(\n  \
+    \      task_id=\"report_summary\",\n        name=\"asr-report\",\n        cmds=[\"\
+    python\", \"services/batch/report.py\"],\n        execution_timeout=timedelta(minutes=5),\n\
+    \        **_COMMON,\n    )\n\n    validate_input >> run_batch_pipeline >> verify_results\
+    \ >> report_summary\n"
 kind: ConfigMap
 metadata:
   name: airflow-dags
