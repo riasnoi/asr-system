@@ -66,9 +66,7 @@ def build_call_score(call_id: str, utterances: list[Utterance]) -> CallScore:
     balance_bonus = max(0.0, 1.0 - abs(talk_ratio_op - 0.5) * 4.0)
 
     overall = round(
-        0.50 * client_satisfaction
-        + 0.35 * operator_quality
-        + 0.15 * balance_bonus * 100.0,
+        0.50 * client_satisfaction + 0.35 * operator_quality + 0.15 * balance_bonus * 100.0,
         1,
     )
 
