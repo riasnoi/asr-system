@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASR — Анализ звонков</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <style>
+    :root {
+      --brand: #4f46e5;
+      --brand-light: #ede9fe;
+    }
+    body { background: #f8f9fc; }
+    .navbar-brand { font-weight: 700; letter-spacing: -.5px; }
+    .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.07); border-radius: 12px; }
+    .score-circle {
+      width: 90px; height: 90px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; font-weight: 700; margin: 0 auto 6px;
+      background: conic-gradient(var(--c, #4f46e5) calc(var(--p, 0) * 1%), #e5e7eb 0);
+    }
+    .score-label { font-size: .75rem; color: #6b7280; text-align: center; }
+    .emotion-badge { font-size: .72rem; border-radius: 6px; padding: 2px 8px; font-weight: 600; }
+    .emotion-positive  { background:#d1fae5; color:#065f46; }
+    .emotion-neutral   { background:#e0e7ff; color:#3730a3; }
+    .emotion-sad       { background:#fef3c7; color:#92400e; }
+    .emotion-angry     { background:#fee2e2; color:#991b1b; }
+    .utt-row { border-left: 3px solid transparent; padding: 8px 10px; border-radius: 6px; margin-bottom: 4px; background:#fff; }
+    .utt-row.operator { border-color: #4f46e5; }
+    .utt-row.client   { border-color: #10b981; }
+    .utt-time { font-size:.72rem; color:#9ca3af; white-space:nowrap; }
+    .utt-speaker { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+    .utt-speaker.operator { color:#4f46e5; }
+    .utt-speaker.client   { color:#10b981; }
+    .utt-text { font-size:.875rem; color:#1f2937; }
+    .call-item { cursor:pointer; transition:background .15s; }
+    .call-item:hover { background:#f3f4f6 !important; }
+    .call-item.active { background:var(--brand-light) !important; }
+    #upload-zone {
+      border: 2px dashed #cbd5e1; border-radius:12px; padding:2rem;
+      text-align:center; cursor:pointer; transition:border-color .2s, background .2s;
+    }
+    #upload-zone.drag-over { border-color:var(--brand); background:#f0eeff; }
+    #upload-zone input[type=file] { display:none; }
+    .progress-ring { transform: rotate(-90deg); }
+    #toast-container { position:fixed; top:1rem; right:1rem; z-index:9999; }
+    .confidence-bar { height:4px; border-radius:2px; background:#e5e7eb; margin-top:3px; }
+    .confidence-fill { height:100%; border-radius:2px; background:#4f46e5; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark" style="background:var(--brand)">
+  <div class="container-fluid px-4">
+    <span class="navbar-brand">
+      <i class="bi bi-soundwave me-2"></i>ASR · Анализ звонков
+    </span>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <input id="api-token" type="password" class="form-control form-control-sm"
+             placeholder="API Token (если нужен)" style="width:200px">
+    </div>
+  </div>
+</nav>
+
+<div id="toast-container"></div>
+
+<div class="container-fluid px-4 py-4">
+  <div class="row g-4">
+
+    <!-- LEFT: Upload + Result -->
+    <div class="col-lg-7">
+
+      <!-- Upload card -->
+      <div class="card p-4 mb-4">
+        <h6 class="fw-bold mb-3"><i class="bi bi-cloud-upload me-2 text-indigo-600"></i>Загрузить звонок</h6>
+
+        <div id="upload-zone" onclick="document.getElementById('audio-file').click()">
+          <i class="bi bi-file-earmark-music display-5 text-secondary mb-2 d-block"></i>
+          <p class="mb-1 fw-semibold">Перетащите аудиофайл или нажмите для выбора</p>
+          <p class="text-muted small mb-0">WAV · MP3 · FLAC</p>
+          <input type="file" id="audio-file" accept=".wav,.mp3,.flac,audio/*">
+        </div>
+
+        <div id="file-preview" class="mt-3 d-none">
+          <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:#f3f4f6">
+            <i class="bi bi-music-note-beamed text-primary fs-5"></i>
+            <div class="flex-grow-1 overflow-hidden">
+              <div class="fw-semibold text-truncate" id="file-name"></div>
+              <div class="text-muted small" id="file-size"></div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger py-0" onclick="clearFile()"><i class="bi bi-x"></i></button>
+          </div>
+        </div>
+
+        <div class="mt-3 row g-2 align-items-end">
+          <div class="col">
+            <label class="form-label small fw-semibold mb-1">ID звонка <span class="text-muted fw-normal">(опционально)</span></label>
+            <input type="text" id="call-id" class="form-control" placeholder="call_20240101_001">
+          </div>
+          <div class="col-auto">
+            <button id="submit-btn" class="btn btn-primary px-4" onclick="submitTranscribe()">
+              <i class="bi bi-play-fill me-1"></i>Анализировать
+            </button>
+          </div>
+        </div>
+
+        <div id="progress-wrap" class="mt-3 d-none">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <span class="small text-muted" id="progress-text">Загрузка и транскрибация…</span>
+          </div>
+          <div class="progress" style="height:4px">
+            <div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result card -->
+      <div class="card p-4 d-none" id="result-card">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+          <h6 class="fw-bold mb-0">
+            <i class="bi bi-bar-chart-line me-2"></i>Результат:
+            <span class="text-primary font-monospace" id="res-call-id"></span>
+          </h6>
+          <span id="res-updated" class="text-muted small"></span>
+        </div>
+
+        <!-- Score meters -->
+        <div class="row g-3 mb-4" id="score-meters">
+          <div class="col-4 text-center">
+            <div class="score-circle" id="sc-overall" style="--p:0;--c:#4f46e5">
+              <span id="sc-overall-val">—</span>
+            </div>
+            <div class="score-label">Общий<br>рейтинг</div>
+          </div>
+          <div class="col-4 text-center">
+            <div class="score-circle" id="sc-client" style="--p:0;--c:#10b981">
+              <span id="sc-client-val">—</span>
+            </div>
+            <div class="score-label">Удовлетворённость<br>клиента</div>
+          </div>
+          <div class="col-4 text-center">
+            <div class="score-circle" id="sc-operator" style="--p:0;--c:#f59e0b">
+              <span id="sc-operator-val">—</span>
+            </div>
+            <div class="score-label">Качество<br>оператора</div>
+          </div>
+        </div>
+
+        <!-- Detailed metrics row -->
+        <div class="row g-2 mb-4">
+          <div class="col-6 col-md-3">
+            <div class="p-3 rounded-3 text-center" style="background:#f3f4f6">
+              <div class="fw-bold fs-5" id="met-neg-client">—</div>
+              <div class="small text-muted">Негатив клиента</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-3 rounded-3 text-center" style="background:#f3f4f6">
+              <div class="fw-bold fs-5" id="met-neg-op">—</div>
+              <div class="small text-muted">Негатив оператора</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-3 rounded-3 text-center" style="background:#f3f4f6">
+              <div class="fw-bold fs-5" id="met-talk-ratio">—</div>
+              <div class="small text-muted">Доля речи оп-ра</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-3 rounded-3 text-center" style="background:#f3f4f6">
+              <div class="fw-bold fs-5" id="met-duration">—</div>
+              <div class="small text-muted">Длительность</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Utterances timeline -->
+        <h6 class="fw-bold mb-3"><i class="bi bi-chat-left-text me-2"></i>Транскрипция</h6>
+        <div id="utterances-list"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Call history -->
+    <div class="col-lg-5">
+      <div class="card p-4 h-100">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2"></i>История звонков</h6>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadCalls()">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+
+        <div class="input-group mb-3">
+          <span class="input-group-text bg-white"><i class="bi bi-funnel"></i></span>
+          <input type="number" id="min-neg" class="form-control" placeholder="Мин. негатив-индекс" min="0" max="1" step="0.05" value="0">
+          <button class="btn btn-outline-primary" onclick="loadCalls()">Фильтр</button>
+        </div>
+
+        <div id="calls-loading" class="text-center py-4 d-none">
+          <div class="spinner-border text-primary" role="status"></div>
+        </div>
+        <div id="calls-empty" class="text-center py-5 text-muted d-none">
+          <i class="bi bi-inbox display-5 d-block mb-2"></i>
+          Нет сохранённых звонков
+        </div>
+        <div id="calls-list" class="overflow-auto" style="max-height:calc(100vh - 260px)"></div>
+        <div id="calls-pagination" class="d-flex justify-content-between align-items-center mt-3 d-none">
+          <button class="btn btn-sm btn-outline-secondary" id="btn-prev" onclick="changePage(-1)">
+            <i class="bi bi-chevron-left"></i> Назад
+          </button>
+          <span class="small text-muted" id="page-info"></span>
+          <button class="btn btn-sm btn-outline-secondary" id="btn-next" onclick="changePage(1)">
+            Вперёд <i class="bi bi-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let currentPage = 0;
+const PAGE_SIZE = 20;
+let totalCalls = 0;
+let selectedCallId = null;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function token() { return document.getElementById('api-token').value.trim(); }
+
+function headers(extra = {}) {
+  const h = { ...extra };
+  const t = token();
+  if (t) h['X-API-Token'] = t;
+  return h;
+}
+
+function showToast(msg, type = 'danger') {
+  const id = 'toast-' + Date.now();
+  const icon = type === 'success' ? 'bi-check-circle-fill text-success'
+             : type === 'warning' ? 'bi-exclamation-triangle-fill text-warning'
+             : 'bi-x-circle-fill text-danger';
+  const html = `<div id="${id}" class="toast align-items-center bg-white border-0 shadow show mb-2" role="alert">
+    <div class="d-flex">
+      <div class="toast-body d-flex gap-2 align-items-start">
+        <i class="bi ${icon} mt-1"></i><span>${msg}</span>
+      </div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>`;
+  document.getElementById('toast-container').insertAdjacentHTML('beforeend', html);
+  setTimeout(() => document.getElementById(id)?.remove(), 5000);
+}
+
+function fmtPct(val) { return (val * 100).toFixed(0) + '%'; }
+function fmtSec(s) {
+  if (s < 60) return s.toFixed(0) + ' с';
+  return Math.floor(s / 60) + ' мин ' + (s % 60).toFixed(0) + ' с';
+}
+function fmtTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return (m > 0 ? m + ':' : '') + String(s).padStart(2, '0');
+}
+function fmtDate(iso) {
+  return new Date(iso).toLocaleString('ru-RU', { dateStyle:'short', timeStyle:'short' });
+}
+function scoreColor(v) {
+  if (v >= 75) return '#10b981';
+  if (v >= 50) return '#f59e0b';
+  return '#ef4444';
+}
+
+function setScoreCircle(id, valId, value) {
+  const pct = Math.round(Math.min(100, Math.max(0, value)));
+  const el = document.getElementById(id);
+  const col = scoreColor(pct);
+  el.style.setProperty('--p', pct);
+  el.style.setProperty('--c', col);
+  document.getElementById(valId).textContent = pct;
+}
+
+const EMOTION_LABELS = {
+  positive: 'Позитив', neutral: 'Нейтраль', sad: 'Грусть', angry: 'Злость'
+};
+
+// ─── File upload zone ─────────────────────────────────────────────────────────
+const zone = document.getElementById('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+document.getElementById('audio-file').addEventListener('change', e => {
+  if (e.target.files[0]) setFile(e.target.files[0]);
+});
+
+function setFile(f) {
+  document.getElementById('audio-file')._file = f;
+  document.getElementById('file-name').textContent = f.name;
+  document.getElementById('file-size').textContent = (f.size / 1024).toFixed(1) + ' KB';
+  document.getElementById('file-preview').classList.remove('d-none');
+  if (!document.getElementById('call-id').value) {
+    document.getElementById('call-id').value = f.name.replace(/\.[^.]+$/, '');
+  }
+}
+
+function clearFile() {
+  document.getElementById('audio-file').value = '';
+  document.getElementById('audio-file')._file = null;
+  document.getElementById('file-preview').classList.add('d-none');
+}
+
+// ─── Transcribe ───────────────────────────────────────────────────────────────
+async function submitTranscribe() {
+  const fileInput = document.getElementById('audio-file');
+  const file = fileInput._file || fileInput.files[0];
+  if (!file) { showToast('Выберите аудиофайл', 'warning'); return; }
+
+  const callId = document.getElementById('call-id').value.trim();
+  const formData = new FormData();
+  formData.append('file', file);
+  if (callId) formData.append('call_id', callId);
+
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('progress-wrap').classList.remove('d-none');
+  document.getElementById('result-card').classList.add('d-none');
+  document.getElementById('progress-text').textContent = 'Загрузка и транскрибация…';
+
+  try {
+    const resp = await fetch('/transcribe', {
+      method: 'POST',
+      headers: headers(),
+      body: formData
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Ошибка сервера');
+    }
+    const data = await resp.json();
+    renderResult(data);
+    showToast('Анализ завершён', 'success');
+    loadCalls();
+  } catch (e) {
+    showToast('Ошибка: ' + e.message);
+  } finally {
+    document.getElementById('submit-btn').disabled = false;
+    document.getElementById('progress-wrap').classList.add('d-none');
+  }
+}
+
+// ─── Render result ────────────────────────────────────────────────────────────
+function renderResult(data) {
+  const card = document.getElementById('result-card');
+  card.classList.remove('d-none');
+
+  document.getElementById('res-call-id').textContent = data.call_id;
+  if (data.score?.updated_at) {
+    document.getElementById('res-updated').textContent = fmtDate(data.score.updated_at);
+  }
+
+  const s = data.score || {};
+  setScoreCircle('sc-overall',   'sc-overall-val',   s.overall_score ?? 0);
+  setScoreCircle('sc-client',    'sc-client-val',    s.client_satisfaction ?? 0);
+  setScoreCircle('sc-operator',  'sc-operator-val',  s.operator_quality ?? 0);
+
+  document.getElementById('met-neg-client').textContent  = fmtPct(s.negative_index_client ?? 0);
+  document.getElementById('met-neg-op').textContent      = fmtPct(s.negative_index_operator ?? 0);
+  document.getElementById('met-talk-ratio').textContent  = fmtPct(s.talk_ratio_operator ?? 0.5);
+  document.getElementById('met-duration').textContent    = fmtSec(s.total_duration_seconds ?? 0);
+
+  const list = document.getElementById('utterances-list');
+  list.innerHTML = '';
+  (data.utterances || []).forEach(u => {
+    const em = u.emotion || 'neutral';
+    const conf = Math.round((u.confidence || 0) * 100);
+    list.insertAdjacentHTML('beforeend', `
+      <div class="utt-row ${u.speaker}">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="utt-speaker ${u.speaker}">${u.speaker === 'operator' ? 'Оператор' : 'Клиент'}</span>
+          <div class="d-flex align-items-center gap-2">
+            <span class="emotion-badge emotion-${em}">${EMOTION_LABELS[em] || em}</span>
+            <span class="utt-time">${fmtTime(u.start_sec)}–${fmtTime(u.end_sec)}</span>
+          </div>
+        </div>
+        <div class="utt-text">${escHtml(u.text)}</div>
+        <div class="confidence-bar mt-1"><div class="confidence-fill" style="width:${conf}%"></div></div>
+      </div>`);
+  });
+
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Calls history ────────────────────────────────────────────────────────────
+async function loadCalls() {
+  const minNeg = parseFloat(document.getElementById('min-neg').value) || 0;
+  const offset = currentPage * PAGE_SIZE;
+  document.getElementById('calls-loading').classList.remove('d-none');
+  document.getElementById('calls-list').innerHTML = '';
+  document.getElementById('calls-empty').classList.add('d-none');
+  document.getElementById('calls-pagination').classList.add('d-none');
+
+  try {
+    const resp = await fetch(
+      `/calls?min_negative_index=${minNeg}&offset=${offset}&limit=${PAGE_SIZE}`,
+      { headers: headers() }
+    );
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
+    totalCalls = data.total;
+    renderCallsList(data.items);
+  } catch (e) {
+    showToast('Не удалось загрузить звонки: ' + e.message, 'warning');
+  } finally {
+    document.getElementById('calls-loading').classList.add('d-none');
+  }
+}
+
+function renderCallsList(items) {
+  const list = document.getElementById('calls-list');
+  list.innerHTML = '';
+
+  if (!items.length) {
+    document.getElementById('calls-empty').classList.remove('d-none');
+    return;
+  }
+
+  items.forEach(item => {
+    const score = item.overall_score ?? 0;
+    const col = scoreColor(score);
+    const active = item.call_id === selectedCallId ? 'active' : '';
+    list.insertAdjacentHTML('beforeend', `
+      <div class="call-item p-3 rounded-3 mb-2 ${active}" style="background:#fff"
+           onclick="openCall('${escHtml(item.call_id)}', this)">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="fw-semibold text-truncate font-monospace small">${escHtml(item.call_id)}</span>
+          <span class="fw-bold small ms-2" style="color:${col};white-space:nowrap">${Math.round(score)}/100</span>
+        </div>
+        <div class="d-flex gap-3 mt-1">
+          <span class="small text-muted">Клиент: <b>${fmtPct(item.negative_index_client ?? 0)}</b></span>
+          <span class="small text-muted">Оп-р: <b>${fmtPct(item.negative_index_operator ?? 0)}</b></span>
+          <span class="small text-muted ms-auto">${item.updated_at ? fmtDate(item.updated_at) : ''}</span>
+        </div>
+      </div>`);
+  });
+
+  if (totalCalls > PAGE_SIZE) {
+    document.getElementById('calls-pagination').classList.remove('d-none');
+    document.getElementById('page-info').textContent =
+      `Стр. ${currentPage + 1} из ${Math.ceil(totalCalls / PAGE_SIZE)} (всего ${totalCalls})`;
+    document.getElementById('btn-prev').disabled = currentPage === 0;
+    document.getElementById('btn-next').disabled = (currentPage + 1) * PAGE_SIZE >= totalCalls;
+  }
+}
+
+async function openCall(callId, el) {
+  selectedCallId = callId;
+  document.querySelectorAll('.call-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+
+  document.getElementById('progress-wrap').classList.remove('d-none');
+  document.getElementById('progress-text').textContent = 'Загрузка звонка…';
+  document.getElementById('result-card').classList.add('d-none');
+
+  try {
+    const resp = await fetch(`/calls/${encodeURIComponent(callId)}`, { headers: headers() });
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
+    renderResult(data);
+  } catch (e) {
+    showToast('Не удалось загрузить звонок: ' + e.message);
+  } finally {
+    document.getElementById('progress-wrap').classList.add('d-none');
+  }
+}
+
+function changePage(delta) {
+  const newPage = currentPage + delta;
+  if (newPage < 0 || newPage * PAGE_SIZE >= totalCalls) return;
+  currentPage = newPage;
+  loadCalls();
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+loadCalls();
+</script>
+</body>
+</html>

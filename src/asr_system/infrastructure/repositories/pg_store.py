@@ -33,8 +33,20 @@ CREATE TABLE IF NOT EXISTS call_scores (
     call_id                  TEXT         PRIMARY KEY,
     negative_index_client    DOUBLE PRECISION NOT NULL,
     negative_index_operator  DOUBLE PRECISION NOT NULL,
-    updated_at               TIMESTAMPTZ  NOT NULL
+    updated_at               TIMESTAMPTZ  NOT NULL,
+    overall_score            DOUBLE PRECISION NOT NULL DEFAULT 0,
+    client_satisfaction      DOUBLE PRECISION NOT NULL DEFAULT 0,
+    operator_quality         DOUBLE PRECISION NOT NULL DEFAULT 0,
+    talk_ratio_operator      DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+    total_duration_seconds   DOUBLE PRECISION NOT NULL DEFAULT 0
 );
+
+-- Migration: add new columns to existing tables that predate this schema version.
+ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS overall_score          DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS client_satisfaction    DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS operator_quality       DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS talk_ratio_operator    DOUBLE PRECISION NOT NULL DEFAULT 0.5;
+ALTER TABLE call_scores ADD COLUMN IF NOT EXISTS total_duration_seconds DOUBLE PRECISION NOT NULL DEFAULT 0;
 """
 
 
@@ -140,19 +152,31 @@ class PgCallScoreRepository(CallScoreRepositoryPort):
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO call_scores
-                        (call_id, negative_index_client, negative_index_operator, updated_at)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO call_scores (
+                        call_id, negative_index_client, negative_index_operator, updated_at,
+                        overall_score, client_satisfaction, operator_quality,
+                        talk_ratio_operator, total_duration_seconds
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (call_id) DO UPDATE SET
                         negative_index_client   = EXCLUDED.negative_index_client,
                         negative_index_operator = EXCLUDED.negative_index_operator,
-                        updated_at              = EXCLUDED.updated_at
+                        updated_at              = EXCLUDED.updated_at,
+                        overall_score           = EXCLUDED.overall_score,
+                        client_satisfaction     = EXCLUDED.client_satisfaction,
+                        operator_quality        = EXCLUDED.operator_quality,
+                        talk_ratio_operator     = EXCLUDED.talk_ratio_operator,
+                        total_duration_seconds  = EXCLUDED.total_duration_seconds
                     """,
                     (
                         score.call_id,
                         score.negative_index_client,
                         score.negative_index_operator,
                         score.updated_at,
+                        score.overall_score,
+                        score.client_satisfaction,
+                        score.operator_quality,
+                        score.talk_ratio_operator,
+                        score.total_duration_seconds,
                     ),
                 )
             conn.commit()
@@ -165,7 +189,9 @@ class PgCallScoreRepository(CallScoreRepositoryPort):
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT call_id, negative_index_client, negative_index_operator, updated_at
+                    SELECT call_id, negative_index_client, negative_index_operator, updated_at,
+                           overall_score, client_satisfaction, operator_quality,
+                           talk_ratio_operator, total_duration_seconds
                     FROM call_scores
                     WHERE call_id = %s
                     """,
@@ -182,6 +208,11 @@ class PgCallScoreRepository(CallScoreRepositoryPort):
             negative_index_client=row[1],
             negative_index_operator=row[2],
             updated_at=row[3],
+            overall_score=row[4],
+            client_satisfaction=row[5],
+            operator_quality=row[6],
+            talk_ratio_operator=row[7],
+            total_duration_seconds=row[8],
         )
 
     def list_all(self) -> list[CallScore]:
@@ -190,7 +221,9 @@ class PgCallScoreRepository(CallScoreRepositoryPort):
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT call_id, negative_index_client, negative_index_operator, updated_at
+                    SELECT call_id, negative_index_client, negative_index_operator, updated_at,
+                           overall_score, client_satisfaction, operator_quality,
+                           talk_ratio_operator, total_duration_seconds
                     FROM call_scores
                     ORDER BY updated_at DESC
                     """
@@ -205,6 +238,11 @@ class PgCallScoreRepository(CallScoreRepositoryPort):
                 negative_index_client=row[1],
                 negative_index_operator=row[2],
                 updated_at=row[3],
+                overall_score=row[4],
+                client_satisfaction=row[5],
+                operator_quality=row[6],
+                talk_ratio_operator=row[7],
+                total_duration_seconds=row[8],
             )
             for row in rows
         ]

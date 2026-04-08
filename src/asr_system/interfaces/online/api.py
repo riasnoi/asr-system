@@ -21,9 +21,11 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from prometheus_fastapi_instrumentator import Instrumentator
+
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 from asr_system.application.use_cases.get_call_card import GetCallCardUseCase
 from asr_system.application.use_cases.list_calls import ListCallsUseCase
@@ -109,6 +111,11 @@ async def domain_error_handler(_request: Request, exc: DomainError) -> JSONRespo
     if isinstance(exc, CallNotFoundError):
         return JSONResponse(status_code=404, content={"detail": str(exc)})
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def frontend() -> HTMLResponse:
+    return HTMLResponse((_TEMPLATES_DIR / "index.html").read_text(encoding="utf-8"))
 
 
 @app.get("/health", summary="Health check", tags=["ops"])

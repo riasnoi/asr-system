@@ -90,6 +90,11 @@ class JsonCallScoreRepository(CallScoreRepositoryPort):
                         negative_index_client=raw["negative_index_client"],
                         negative_index_operator=raw["negative_index_operator"],
                         updated_at=datetime.fromisoformat(raw["updated_at"]),
+                        overall_score=raw.get("overall_score", 0.0),
+                        client_satisfaction=raw.get("client_satisfaction", 0.0),
+                        operator_quality=raw.get("operator_quality", 0.0),
+                        talk_ratio_operator=raw.get("talk_ratio_operator", 0.5),
+                        total_duration_seconds=raw.get("total_duration_seconds", 0.0),
                     )
                 )
         return result
