@@ -335,16 +335,26 @@ async function submitTranscribe() {
   document.getElementById('progress-text').textContent = 'Загрузка и транскрибация…';
 
   try {
-    const resp = await fetch('/transcribe', {
+    // POST /calls → 201 Created + Location header
+    const created = await fetch('/calls', {
       method: 'POST',
       headers: headers(),
       body: formData
     });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+    if (!created.ok) {
+      const err = await created.json().catch(() => ({ detail: created.statusText }));
       throw new Error(err.detail || 'Ошибка сервера');
     }
-    const data = await resp.json();
+    const { location } = await created.json();
+    document.getElementById('progress-text').textContent = 'Загрузка результата…';
+
+    // GET /calls/{id} — получаем полную карточку по Location
+    const cardResp = await fetch(location, { headers: headers() });
+    if (!cardResp.ok) {
+      const err = await cardResp.json().catch(() => ({ detail: cardResp.statusText }));
+      throw new Error(err.detail || 'Не удалось загрузить карточку');
+    }
+    const data = await cardResp.json();
     renderResult(data);
     showToast('Анализ завершён', 'success');
     loadCalls();

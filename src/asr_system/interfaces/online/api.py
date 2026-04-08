@@ -21,7 +21,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -153,20 +153,24 @@ def call_card(call_id: str) -> dict[str, object]:
 
 
 @app.post(
-    "/transcribe",
-    summary="Transcribe an audio file in real time and store the result",
+    "/calls",
+    summary="Transcribe an audio file and create a new call resource",
+    status_code=201,
     tags=["calls"],
     dependencies=[Depends(_verify_token)],
 )
-async def transcribe(
+async def create_call(
+    request: Request,
     file: UploadFile = File(..., description="Audio file (wav / mp3 / flac)"),
     call_id: str | None = Form(
         default=None,
         description="Optional call ID; defaults to the uploaded filename stem",
     ),
-) -> dict[str, object]:
-    """Upload an audio file, transcribe it via Triton, classify emotions,
-    persist the result in the shared database and return the full call card."""
+) -> Response:
+    """Upload an audio file, transcribe it, classify emotions and persist the
+    result.  Returns **201 Created** with a ``Location`` header pointing to the
+    new call resource (``GET /calls/{call_id}``) and a minimal JSON body so
+    clients can follow up without an extra round-trip."""
     original_name = file.filename or "audio.wav"
     suffix = Path(original_name).suffix or ".wav"
     stem = call_id or Path(original_name).stem
@@ -189,4 +193,10 @@ async def transcribe(
             logger.exception("Transcription failed for call_id=%s", stem)
             raise HTTPException(status_code=500, detail=f"Transcription error: {exc}") from exc
 
-    return _state.get_call_card.execute(processed_id)
+    location = str(request.url_for("call_card", call_id=processed_id))
+    body = JSONResponse(
+        content={"call_id": processed_id, "location": location},
+        status_code=201,
+        headers={"Location": location},
+    )
+    return body
