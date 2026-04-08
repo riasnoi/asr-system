@@ -1,34 +1,23 @@
-"""Read call_scores.jsonl from S3 and print a summary for the target date."""
+"""Read call scores from the repository and print a summary for the target date."""
 
-import json
 import os
 from datetime import date
 
-import boto3
-
 from asr_system.config import get_settings
-
-raw = os.environ.get("AIRFLOW_CTX_LOGICAL_DATE", "")
-d = raw[:10] if raw else date.today().isoformat()
+from asr_system.infrastructure.factory import create_repository_adapters
+from asr_system.logging_config import setup_logging
 
 settings = get_settings()
-key = f"results/{d}/call_scores.jsonl"
+setup_logging(settings.app.log_level)
 
-client = boto3.client(
-    "s3",
-    aws_access_key_id=settings.batch_secrets.storage_access_key,
-    aws_secret_access_key=settings.batch_secrets.storage_secret_key,
-    endpoint_url=settings.s3.endpoint_url or None,
-    region_name=settings.s3.region,
-)
+raw = os.environ.get("AIRFLOW_CTX_LOGICAL_DATE", "")
+target_date = date.fromisoformat(raw[:10]) if raw else date.today()
 
-try:
-    body = client.get_object(Bucket=settings.s3.bucket, Key=key)["Body"].read().decode()
-    scores = [json.loads(line) for line in body.strip().splitlines() if line.strip()]
-except client.exceptions.NoSuchKey:
-    scores = []
-    print(f"no results file at s3://{settings.s3.bucket}/{key} — nothing was processed")
+_, scores_repo = create_repository_adapters(settings)
+scores = scores_repo.list_all()
 
-n = len(scores)
-avg = sum(s.get("overall_score", 0) for s in scores) / max(n, 1)
-print(f"summary: {n} calls processed, avg_score={avg:.1f}")
+day_scores = [s for s in scores if s.updated_at.date() == target_date]
+
+n = len(day_scores)
+avg = sum(s.overall_score for s in day_scores) / max(n, 1)
+print(f"summary: {n} calls processed on {target_date}, avg_score={avg:.1f}")
