@@ -9,7 +9,15 @@ from transformers import pipeline
 
 logger = logging.getLogger(__name__)
 
-EMOTION_LABELS = ("neutral", "positive", "sad", "angry")
+# cointegrated/rubert-tiny2-cedr-emotion-detection labels → our domain labels
+_CEDR_LABEL_MAP = {
+    "no_emotion": "neutral",
+    "joy": "positive",
+    "sadness": "sad",
+    "anger": "angry",
+    "fear": "sad",       # closest negative without dedicated category
+    "surprise": "neutral",
+}
 
 
 class TritonPythonModel:
@@ -42,9 +50,9 @@ class TritonPythonModel:
             results = self.pipe(text)[0]
             best = max(results, key=lambda r: r["score"])
 
-            label = best["label"].lower()
-            if label not in EMOTION_LABELS:
-                label = "neutral"
+            raw_label = best["label"].lower()
+            label = _CEDR_LABEL_MAP.get(raw_label, "neutral")
+            logger.debug("emotion raw=%s mapped=%s score=%.3f", raw_label, label, best["score"])
 
             emotion_out = pb_utils.Tensor("EMOTION", np.array([label], dtype=object))
             confidence_out = pb_utils.Tensor(
