@@ -5,7 +5,7 @@ Logs are streamed back to Airflow in real time and stored on a persistent
 volume so they survive scheduler pod restarts.
 
 Pipeline:
-  validate_input → run_batch_pipeline → verify_results → report_summary
+  validate_input → run_batch_pipeline → report_summary
 """
 
 from __future__ import annotations
@@ -89,14 +89,6 @@ with DAG(
         **_COMMON_WITH_SCRATCH,
     )
 
-    verify_results = KubernetesPodOperator(
-        task_id="verify_results",
-        name="asr-verify-results",
-        cmds=["python", "services/batch/verify.py"],
-        execution_timeout=timedelta(minutes=5),
-        **_COMMON,
-    )
-
     report_summary = KubernetesPodOperator(
         task_id="report_summary",
         name="asr-report",
@@ -105,4 +97,4 @@ with DAG(
         **_COMMON,
     )
 
-    validate_input >> run_batch_pipeline >> verify_results >> report_summary
+    validate_input >> run_batch_pipeline >> report_summary

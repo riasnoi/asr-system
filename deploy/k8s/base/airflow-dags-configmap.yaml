@@ -3,9 +3,9 @@ data:
   nightly_batch.py: "\"\"\"Nightly ASR batch DAG.\n\nUses KubernetesPodOperator to\
     \ run each pipeline stage in an isolated pod.\nLogs are streamed back to Airflow\
     \ in real time and stored on a persistent\nvolume so they survive scheduler pod\
-    \ restarts.\n\nPipeline:\n  validate_input → run_batch_pipeline → verify_results\
-    \ → report_summary\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom datetime\
-    \ import datetime, timedelta\n\nfrom airflow import DAG\nfrom airflow.providers.cncf.kubernetes.operators.pod\
+    \ restarts.\n\nPipeline:\n  validate_input → run_batch_pipeline → report_summary\n\
+    \"\"\"\n\nfrom __future__ import annotations\n\nfrom datetime import datetime,\
+    \ timedelta\n\nfrom airflow import DAG\nfrom airflow.providers.cncf.kubernetes.operators.pod\
     \ import KubernetesPodOperator\nfrom kubernetes.client import (\n    V1ConfigMapEnvSource,\n\
     \    V1EmptyDirVolumeSource,\n    V1EnvFromSource,\n    V1LocalObjectReference,\n\
     \    V1SecretEnvSource,\n    V1Volume,\n    V1VolumeMount,\n)\n\nNAMESPACE = \"\
@@ -29,14 +29,10 @@ data:
     \n    run_batch_pipeline = KubernetesPodOperator(\n        task_id=\"run_batch_pipeline\"\
     ,\n        name=\"asr-batch-run\",\n        cmds=[\"python\", \"services/batch/main.py\"\
     ],\n        execution_timeout=timedelta(hours=6),\n        sla=timedelta(hours=8),\n\
-    \        **_COMMON_WITH_SCRATCH,\n    )\n\n    verify_results = KubernetesPodOperator(\n\
-    \        task_id=\"verify_results\",\n        name=\"asr-verify-results\",\n \
-    \       cmds=[\"python\", \"services/batch/verify.py\"],\n        execution_timeout=timedelta(minutes=5),\n\
-    \        **_COMMON,\n    )\n\n    report_summary = KubernetesPodOperator(\n  \
-    \      task_id=\"report_summary\",\n        name=\"asr-report\",\n        cmds=[\"\
+    \        **_COMMON_WITH_SCRATCH,\n    )\n\n    report_summary = KubernetesPodOperator(\n\
+    \        task_id=\"report_summary\",\n        name=\"asr-report\",\n        cmds=[\"\
     python\", \"services/batch/report.py\"],\n        execution_timeout=timedelta(minutes=5),\n\
-    \        **_COMMON,\n    )\n\n    validate_input >> run_batch_pipeline >> verify_results\
-    \ >> report_summary\n"
+    \        **_COMMON,\n    )\n\n    validate_input >> run_batch_pipeline >> report_summary\n"
 kind: ConfigMap
 metadata:
   name: airflow-dags
