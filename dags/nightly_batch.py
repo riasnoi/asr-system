@@ -16,9 +16,9 @@ from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from kubernetes.client import (
     V1ConfigMapEnvSource,
+    V1EmptyDirVolumeSource,
     V1EnvFromSource,
     V1LocalObjectReference,
-    V1PersistentVolumeClaimVolumeSource,
     V1SecretEnvSource,
     V1Volume,
     V1VolumeMount,
@@ -39,24 +39,27 @@ _ENV_FROM = [
     V1EnvFromSource(secret_ref=V1SecretEnvSource(name="asr-vault-credentials")),
 ]
 
-_DATA_VOLUME = V1Volume(
-    name="data",
-    persistent_volume_claim=V1PersistentVolumeClaimVolumeSource(claim_name="asr-data-pvc"),
-)
-
-_DATA_MOUNT = V1VolumeMount(name="data", mount_path="/app/data")
-
 _PULL_SECRETS = [V1LocalObjectReference(name="ghcr-pull-secret")]
+
+# Ephemeral scratch space — no node affinity, no PVC dependency.
+# run_batch_pipeline writes results here then uploads to S3.
+# verify_results and report_summary read directly from S3.
+_SCRATCH_VOLUME = V1Volume(name="data", empty_dir=V1EmptyDirVolumeSource())
+_SCRATCH_MOUNT = V1VolumeMount(name="data", mount_path="/app/data")
 
 _COMMON = dict(
     namespace=NAMESPACE,
     image=BATCH_IMAGE,
     env_from=_ENV_FROM,
-    volumes=[_DATA_VOLUME],
-    volume_mounts=[_DATA_MOUNT],
     image_pull_secrets=_PULL_SECRETS,
     is_delete_operator_pod=True,
     get_logs=True,
+)
+
+_COMMON_WITH_SCRATCH = dict(
+    **_COMMON,
+    volumes=[_SCRATCH_VOLUME],
+    volume_mounts=[_SCRATCH_MOUNT],
 )
 
 
@@ -85,7 +88,7 @@ with DAG(
         cmds=["python", "services/batch/main.py"],
         execution_timeout=timedelta(hours=6),
         sla=timedelta(hours=8),
-        **_COMMON,
+        **_COMMON_WITH_SCRATCH,
     )
 
     verify_results = KubernetesPodOperator(
@@ -93,11 +96,21 @@ with DAG(
         name="asr-verify-results",
         cmds=["python", "-c"],
         arguments=[
-            "import os, sys; "
-            "out = os.environ.get('BATCH_OUTPUT_DIR', './data/output'); "
-            "scores = os.path.join(out, 'call_scores.jsonl'); "
-            "ok = os.path.isfile(scores) and os.path.getsize(scores) > 0; "
-            "print(f'verify: {scores} ok={ok}'); "
+            "import os, sys, boto3; "
+            "from asr_system.config import get_settings; "
+            "from datetime import date; "
+            "s = get_settings(); "
+            "raw = os.environ.get('AIRFLOW_CTX_LOGICAL_DATE') or ''; "
+            "d = raw[:10] or date.today().isoformat(); "
+            "key = f'results/{d}/call_scores.jsonl'; "
+            "client = boto3.client('s3', "
+            "  aws_access_key_id=s.batch_secrets.storage_access_key, "
+            "  aws_secret_access_key=s.batch_secrets.storage_secret_key, "
+            "  endpoint_url=s.s3.endpoint_url or None, "
+            "  region_name=s.s3.region); "
+            "try: ok = client.head_object(Bucket=s.s3.bucket, Key=key)['ContentLength'] > 0\n"
+            "except Exception as e: ok = False; print(f'error: {e}')\n"
+            "print(f'verify s3://{s.s3.bucket}/{key} ok={ok}'); "
             "sys.exit(0 if ok else 1)"
         ],
         execution_timeout=timedelta(minutes=5),
@@ -109,12 +122,22 @@ with DAG(
         name="asr-report",
         cmds=["python", "-c"],
         arguments=[
-            "import os, json; "
-            "out = os.environ.get('BATCH_OUTPUT_DIR', './data/output'); "
-            "path = os.path.join(out, 'call_scores.jsonl'); "
-            "scores = [json.loads(l) for l in open(path)]; "
-            "avg = sum(s.get('overall_score', 0) for s in scores) / max(len(scores), 1); "
-            "print(f'summary: {len(scores)} calls, avg_score={avg:.2f}')"
+            "import os, json, boto3; "
+            "from asr_system.config import get_settings; "
+            "from datetime import date; "
+            "s = get_settings(); "
+            "raw = os.environ.get('AIRFLOW_CTX_LOGICAL_DATE') or ''; "
+            "d = raw[:10] or date.today().isoformat(); "
+            "key = f'results/{d}/call_scores.jsonl'; "
+            "client = boto3.client('s3', "
+            "  aws_access_key_id=s.batch_secrets.storage_access_key, "
+            "  aws_secret_access_key=s.batch_secrets.storage_secret_key, "
+            "  endpoint_url=s.s3.endpoint_url or None, "
+            "  region_name=s.s3.region); "
+            "body = client.get_object(Bucket=s.s3.bucket, Key=key)['Body'].read().decode(); "
+            "scores = [json.loads(l) for l in body.strip().splitlines() if l.strip()]; "
+            "n = len(scores); avg = sum(sc.get('overall_score', 0) for sc in scores) / max(n, 1); "
+            "print(f'summary: {n} calls processed, avg_score={avg:.1f}')"
         ],
         execution_timeout=timedelta(minutes=5),
         **_COMMON,
