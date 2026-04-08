@@ -41,9 +41,7 @@ _ENV_FROM = [
 
 _PULL_SECRETS = [V1LocalObjectReference(name="ghcr-pull-secret")]
 
-# Ephemeral scratch space — no node affinity, no PVC dependency.
-# run_batch_pipeline writes results here then uploads to S3.
-# verify_results and report_summary read directly from S3.
+
 _SCRATCH_VOLUME = V1Volume(name="data", empty_dir=V1EmptyDirVolumeSource())
 _SCRATCH_MOUNT = V1VolumeMount(name="data", mount_path="/app/data")
 
