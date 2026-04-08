@@ -10,7 +10,16 @@ data:
   BATCH_OUTPUT_DIR: "/app/data/output"
   ONLINE_API_HOST: "0.0.0.0"
   ONLINE_API_PORT: "8080"
+  # Vault auth (non-secret part)
   VAULT_ENABLED: "true"
   VAULT_AUTH_METHOD: "approle"
   VAULT_MOUNT_POINT: "secret"
   VAULT_BASE_PATH: "asr-system"
+  # ASR provider config (not secrets — safe to keep in ConfigMap)
+  BATCH_ASR_PROVIDER: "remote"
+  BATCH_ASR_MODEL: "whisper-large-v3-turbo"
+  BATCH_ASR_REMOTE_URL: "http://triton.ml-inference.svc.cluster.local:8000"
+  # Emotion provider config
+  BATCH_EMOTION_PROVIDER: "remote"
+  BATCH_EMOTION_MODEL: "rubert-tiny2"
+  BATCH_EMOTION_REMOTE_URL: "http://triton.ml-inference.svc.cluster.local:8000"
