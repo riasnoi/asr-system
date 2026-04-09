@@ -6,6 +6,7 @@ on:
     paths:
       - "dags/**"
       - "deploy/k8s/base/airflow-dags-configmap.yaml"
+      - ".github/workflows/sync-dags.yml"
 
 jobs:
   sync:
@@ -21,7 +22,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "deploy/k8s/base/airflow-dags-configmap.yaml"
+          source: "dags/nightly_batch.py"
           target: ${{ secrets.REMOTE_APP_DIR }}
           strip_components: 0
           overwrite: true
@@ -38,7 +39,7 @@ jobs:
           envs: REMOTE_APP_DIR,NAMESPACE
           script: |
             export KUBECONFIG="${HOME}/.kube/config"
-            CM_FILE="${REMOTE_APP_DIR}/deploy/k8s/base/airflow-dags-configmap.yaml"
+            DAG_FILE="${REMOTE_APP_DIR}/dags/nightly_batch.py"
 
             # Use the currently deployed batch image — no rebuild needed
             BATCH_IMAGE=$(kubectl get cronjob -n "${NAMESPACE}" \
@@ -46,7 +47,11 @@ jobs:
               2>/dev/null || echo "asr-batch:placeholder")
 
             echo "Applying DAG ConfigMap with image: ${BATCH_IMAGE}"
-            sed "s|asr-batch:placeholder|${BATCH_IMAGE}|g" "${CM_FILE}" \
+            kubectl create configmap airflow-dags \
+              --namespace "${NAMESPACE}" \
+              --from-file=nightly_batch.py="${DAG_FILE}" \
+              --dry-run=client -o yaml \
+              | sed "s|asr-batch:placeholder|${BATCH_IMAGE}|g" \
               | kubectl apply -f -
 
             kubectl -n "${NAMESPACE}" rollout restart deployment/airflow-scheduler
