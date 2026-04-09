@@ -3,9 +3,9 @@ from datetime import date
 from pathlib import Path
 
 from asr_system.config import get_settings
+from asr_system.date_context import resolve_target_date
 from asr_system.interfaces.batch.runner import BatchRunner
 from asr_system.logging_config import setup_logging
-from services.batch.date_context import resolve_target_date
 
 logger = logging.getLogger(__name__)
 

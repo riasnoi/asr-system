@@ -29,8 +29,7 @@ NAMESPACE = "asr-system"
 BATCH_IMAGE = "asr-batch:placeholder"
 NO_RECORDINGS_EXIT_CODE = 42
 TARGET_DATE_TEMPLATE = (
-    "{{ dag_run.conf.get('target_date') if dag_run and dag_run.conf and "
-    "dag_run.conf.get('target_date') else logical_date.strftime('%Y-%m-%d') }}"
+    "{{ params.target_date if params.target_date else logical_date.strftime('%Y-%m-%d') }}"
 )
 
 default_args = {

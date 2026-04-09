@@ -1,9 +1,9 @@
 """Read call scores from the repository and print a summary for the target date."""
 
 from asr_system.config import get_settings
+from asr_system.date_context import resolve_target_date
 from asr_system.infrastructure.factory import create_repository_adapters
 from asr_system.logging_config import setup_logging
-from services.batch.date_context import resolve_target_date
 
 settings = get_settings()
 setup_logging(settings.app.log_level)

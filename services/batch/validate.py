@@ -7,7 +7,7 @@ import sys
 from datetime import date
 
 from asr_system.config import Settings, get_settings
-from services.batch.date_context import resolve_target_date
+from asr_system.date_context import resolve_target_date
 
 AUDIO_EXTENSIONS = (".wav", ".mp3", ".flac")
 NO_RECORDINGS_EXIT_CODE = 42
