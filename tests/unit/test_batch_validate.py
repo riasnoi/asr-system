@@ -14,8 +14,6 @@ if str(ROOT_DIR) not in sys.path:
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from asr_system.config import get_settings
-
 
 def _load_validate_module():
     spec = importlib.util.spec_from_file_location("test_batch_validate_module", VALIDATE_PATH)
@@ -29,6 +27,8 @@ def _load_validate_module():
 def test_validate_returns_skip_code_when_no_local_recordings(
     monkeypatch, tmp_path: Path, capsys
 ) -> None:
+    from asr_system.config import get_settings
+
     validate = _load_validate_module()
     target_date = "2026-04-09"
     monkeypatch.setenv("BATCH_S3_BUCKET", "")
@@ -45,6 +45,8 @@ def test_validate_returns_skip_code_when_no_local_recordings(
 def test_validate_returns_success_when_local_recordings_exist(
     monkeypatch, tmp_path: Path, capsys
 ) -> None:
+    from asr_system.config import get_settings
+
     validate = _load_validate_module()
     target_date = "2026-04-09"
     input_dir = tmp_path / target_date
@@ -62,9 +64,9 @@ def test_validate_returns_success_when_local_recordings_exist(
     assert capsys.readouterr().out.strip() == f"validate [local]: 1 recordings for {target_date}"
 
 
-def test_validate_prefers_explicit_batch_target_date(
-    monkeypatch, tmp_path: Path, capsys
-) -> None:
+def test_validate_prefers_explicit_batch_target_date(monkeypatch, tmp_path: Path, capsys) -> None:
+    from asr_system.config import get_settings
+
     validate = _load_validate_module()
     explicit_target_date = "2026-04-07"
     logical_date = "2026-04-09"

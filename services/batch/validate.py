@@ -37,7 +37,9 @@ def _count_local_recordings(settings: Settings, target_date: date) -> int:
     day_dir = os.path.join(settings.storage.input_dir, target_date.isoformat())
     if not os.path.isdir(day_dir):
         return 0
-    return len([filename for filename in os.listdir(day_dir) if filename.endswith(AUDIO_EXTENSIONS)])
+    return len(
+        [filename for filename in os.listdir(day_dir) if filename.endswith(AUDIO_EXTENSIONS)]
+    )
 
 
 def count_recordings(settings: Settings, target_date: date) -> int:
