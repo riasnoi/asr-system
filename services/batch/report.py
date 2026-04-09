@@ -1,17 +1,14 @@
 """Read call scores from the repository and print a summary for the target date."""
 
-import os
-from datetime import date
-
 from asr_system.config import get_settings
 from asr_system.infrastructure.factory import create_repository_adapters
 from asr_system.logging_config import setup_logging
+from services.batch.date_context import resolve_target_date
 
 settings = get_settings()
 setup_logging(settings.app.log_level)
 
-raw = os.environ.get("AIRFLOW_CTX_LOGICAL_DATE", "")
-target_date = date.fromisoformat(raw[:10]) if raw else date.today()
+target_date = resolve_target_date()
 
 _, scores_repo = create_repository_adapters(settings)
 scores = scores_repo.list_all()

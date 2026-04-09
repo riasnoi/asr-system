@@ -1,10 +1,10 @@
 import logging
-import os
 from datetime import date
 from pathlib import Path
 
 from asr_system.config import get_settings
 from asr_system.logging_config import setup_logging
+from services.batch.date_context import resolve_target_date
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +39,7 @@ def _upload_results_to_s3(settings, target_date: date) -> None:
 if __name__ == "__main__":
     settings = get_settings()
     setup_logging(settings.app.log_level)
-
-    raw = os.environ.get("AIRFLOW_CTX_LOGICAL_DATE", "")
-    target_date = date.fromisoformat(raw[:10]) if raw else date.today()
+    target_date = resolve_target_date()
 
     from asr_system.interfaces.batch.runner import BatchRunner
 

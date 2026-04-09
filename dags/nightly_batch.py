@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from kubernetes.client import (
     V1ConfigMapEnvSource,
@@ -26,6 +27,11 @@ from kubernetes.client import (
 
 NAMESPACE = "asr-system"
 BATCH_IMAGE = "asr-batch:placeholder"
+NO_RECORDINGS_EXIT_CODE = 42
+TARGET_DATE_TEMPLATE = (
+    "{{ dag_run.conf.get('target_date') if dag_run and dag_run.conf and "
+    "dag_run.conf.get('target_date') else logical_date.strftime('%Y-%m-%d') }}"
+)
 
 default_args = {
     "owner": "ml-platform",
@@ -49,6 +55,7 @@ _COMMON = dict(
     namespace=NAMESPACE,
     image=BATCH_IMAGE,
     env_from=_ENV_FROM,
+    env_vars={"BATCH_TARGET_DATE": TARGET_DATE_TEMPLATE},
     image_pull_secrets=_PULL_SECRETS,
     is_delete_operator_pod=True,
     get_logs=True,
@@ -69,21 +76,30 @@ with DAG(
     start_date=datetime(2026, 1, 1),
     catchup=False,
     max_active_runs=1,
+    params={
+        "target_date": Param(
+            default=None,
+            type=["null", "string"],
+            format="date",
+            description="Date to process in YYYY-MM-DD. Defaults to the run logical date.",
+        )
+    },
     tags=["asr", "batch", "nightly"],
 ) as dag:
 
     validate_input = KubernetesPodOperator(
         task_id="validate_input",
         name="asr-validate-input",
-        cmds=["python", "services/batch/validate.py"],
+        cmds=["python", "-m", "services.batch.validate"],
         execution_timeout=timedelta(minutes=5),
+        skip_on_exit_code=NO_RECORDINGS_EXIT_CODE,
         **_COMMON,
     )
 
     run_batch_pipeline = KubernetesPodOperator(
         task_id="run_batch_pipeline",
         name="asr-batch-run",
-        cmds=["python", "services/batch/main.py"],
+        cmds=["python", "-m", "services.batch.main"],
         execution_timeout=timedelta(hours=6),
         sla=timedelta(hours=8),
         **_COMMON_WITH_SCRATCH,
@@ -92,7 +108,7 @@ with DAG(
     report_summary = KubernetesPodOperator(
         task_id="report_summary",
         name="asr-report",
-        cmds=["python", "services/batch/report.py"],
+        cmds=["python", "-m", "services.batch.report"],
         execution_timeout=timedelta(minutes=5),
         **_COMMON,
     )
