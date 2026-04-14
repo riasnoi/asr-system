@@ -9,18 +9,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import (
-    Depends,
-    FastAPI,
-    File,
-    Form,
-    HTTPException,
-    Path as PathParam,
-    Query,
-    Request,
-    Security,
-    UploadFile,
-)
+from fastapi import Depends, FastAPI, File, Form, HTTPException
+from fastapi import Path as PathParam
+from fastapi import Query, Request, Security, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
@@ -113,7 +104,9 @@ class CallCardResponse(BaseModel):
 
 
 class CallSummariesResponse(BaseModel):
-    items: list[CallScoreResponse] = Field(description="Paginated list of processed call summaries.")
+    items: list[CallScoreResponse] = Field(
+        description="Paginated list of processed call summaries."
+    )
     total: int = Field(description="Total number of matching call summaries before pagination.")
     offset: int = Field(description="Applied pagination offset.")
     limit: int = Field(description="Applied pagination limit.")
@@ -241,7 +234,9 @@ def list_call_summaries(
         default=0.0,
         ge=0.0,
         le=1.0,
-        description="Return only calls whose client or operator negative index is at least this value.",
+        description=(
+            "Return only calls whose client or operator negative index " "is at least this value."
+        ),
     ),
     offset: int = Query(default=0, ge=0, description="Number of items to skip"),
     limit: int = Query(default=50, ge=1, le=500, description="Max items to return"),
@@ -272,7 +267,7 @@ def list_call_summaries(
     name="get_call_card_legacy",
 )
 def call_card(
-    call_id: str = PathParam(description="Processed call identifier.")
+    call_id: str = PathParam(description="Processed call identifier."),
 ) -> dict[str, object]:
     payload = _state.get_call_card.execute(call_id)
     if payload["score"] is None:
