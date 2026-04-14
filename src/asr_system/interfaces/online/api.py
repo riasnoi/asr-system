@@ -15,6 +15,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Path as PathParam,
     Query,
     Request,
     Security,
@@ -23,7 +24,12 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
-from prometheus_fastapi_instrumentator import Instrumentator
+from pydantic import BaseModel, Field
+
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+except ModuleNotFoundError:  # pragma: no cover - optional in lightweight dev/test envs
+    Instrumentator = None
 
 from asr_system.application.use_cases.get_call_card import GetCallCardUseCase
 from asr_system.application.use_cases.list_calls import ListCallsUseCase
@@ -44,6 +50,78 @@ logger = logging.getLogger(__name__)
 _api_key_header = APIKeyHeader(name="X-API-Token", auto_error=False)
 
 _SAFE_ID = re.compile(r"[^\w\-.]")
+_API_PREFIX = "/api/v1"
+_CALL_SUMMARIES_PATH = f"{_API_PREFIX}/call-summaries"
+_CALL_CARD_PATH = f"{_API_PREFIX}/call-cards/{{call_id}}"
+_TRANSCRIPTIONS_PATH = f"{_API_PREFIX}/transcriptions"
+_OPENAPI_TAGS = [
+    {
+        "name": "calls",
+        "description": "Read-only access to processed call summaries and full call cards.",
+    },
+    {
+        "name": "analysis",
+        "description": "Submit new audio files for transcription and QA scoring.",
+    },
+    {
+        "name": "ops",
+        "description": "Operational endpoints for service health and observability.",
+    },
+]
+
+
+class ErrorResponse(BaseModel):
+    detail: str = Field(description="Human-readable error message.")
+
+
+class HealthResponse(BaseModel):
+    status: str = Field(description="Service health status.", examples=["ok"])
+
+
+class CallScoreResponse(BaseModel):
+    call_id: str = Field(description="Call identifier.")
+    negative_index_client: float = Field(
+        description="Client negativity score in the range from 0.0 to 1.0."
+    )
+    negative_index_operator: float = Field(
+        description="Operator negativity score in the range from 0.0 to 1.0."
+    )
+    updated_at: str = Field(description="Last score update timestamp in ISO 8601 format.")
+    overall_score: float = Field(description="Composite QA score in the range from 0 to 100.")
+    client_satisfaction: float = Field(description="Client satisfaction score from 0 to 100.")
+    operator_quality: float = Field(description="Operator quality score from 0 to 100.")
+    talk_ratio_operator: float = Field(
+        description="Operator speech share in the range from 0.0 to 1.0."
+    )
+    total_duration_seconds: float = Field(description="Total call duration in seconds.")
+
+
+class UtteranceResponse(BaseModel):
+    call_id: str = Field(description="Call identifier.")
+    speaker: str = Field(description="Utterance speaker label, for example `client` or `operator`.")
+    start_sec: float = Field(description="Utterance start timestamp in seconds.")
+    end_sec: float = Field(description="Utterance end timestamp in seconds.")
+    text: str = Field(description="Recognized utterance text.")
+    emotion: str = Field(description="Detected utterance emotion label.")
+    confidence: float = Field(description="Emotion classification confidence from 0.0 to 1.0.")
+
+
+class CallCardResponse(BaseModel):
+    call_id: str = Field(description="Call identifier.")
+    utterances: list[UtteranceResponse] = Field(description="Transcribed utterances for the call.")
+    score: CallScoreResponse | None = Field(description="Aggregated QA score for the call.")
+
+
+class CallSummariesResponse(BaseModel):
+    items: list[CallScoreResponse] = Field(description="Paginated list of processed call summaries.")
+    total: int = Field(description="Total number of matching call summaries before pagination.")
+    offset: int = Field(description="Applied pagination offset.")
+    limit: int = Field(description="Applied pagination limit.")
+
+
+class TranscriptionCreatedResponse(BaseModel):
+    call_id: str = Field(description="Identifier of the processed call.")
+    location: str = Field(description="Absolute URL of the created call card resource.")
 
 
 def _verify_token(token: Annotated[str | None, Security(_api_key_header)]) -> None:
@@ -91,8 +169,13 @@ async def _lifespan(_application: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="ASR Online Service",
     version="0.2.0",
-    description="Real-time transcription and call-center ASR quality scores.",
+    description=(
+        "HTTP API for uploading call audio, browsing processed calls, and fetching "
+        "full QA call cards with utterances and aggregated scores."
+    ),
     lifespan=_lifespan,
+    openapi_tags=_OPENAPI_TAGS,
+    swagger_ui_parameters={"displayRequestDuration": True, "docExpansion": "list"},
 )
 
 app.add_middleware(
@@ -102,7 +185,10 @@ app.add_middleware(
     allow_headers=["X-API-Token", "Content-Type"],
 )
 
-Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["ops"])
+if Instrumentator is not None:
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["ops"])
+else:
+    logger.warning("Prometheus instrumentator is not installed; /metrics endpoint is disabled")
 
 
 @app.exception_handler(DomainError)
@@ -118,19 +204,45 @@ def frontend() -> HTMLResponse:
     return HTMLResponse((_TEMPLATES_DIR / "index.html").read_text(encoding="utf-8"))
 
 
-@app.get("/health", summary="Health check", tags=["ops"])
+@app.get(
+    "/health",
+    summary="Service health check",
+    description="Lightweight probe used by orchestration and monitoring systems.",
+    tags=["ops"],
+    operation_id="getHealthStatus",
+    response_model=HealthResponse,
+)
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @app.get(
-    "/calls",
-    summary="List calls filtered by negative index threshold",
+    _CALL_SUMMARIES_PATH,
+    summary="List processed call summaries",
+    description=(
+        "Returns aggregated QA metrics for processed calls. "
+        "Supports filtering by minimum negative index and offset/limit pagination."
+    ),
     tags=["calls"],
     dependencies=[Depends(_verify_token)],
+    operation_id="listCallSummaries",
+    response_model=CallSummariesResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing or invalid API token."},
+    },
 )
-def calls(
-    min_negative_index: float = Query(default=0.0, ge=0.0, le=1.0),
+@app.get(
+    "/calls",
+    include_in_schema=False,
+    dependencies=[Depends(_verify_token)],
+)
+def list_call_summaries(
+    min_negative_index: float = Query(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Return only calls whose client or operator negative index is at least this value.",
+    ),
     offset: int = Query(default=0, ge=0, description="Number of items to skip"),
     limit: int = Query(default=50, ge=1, le=500, description="Max items to return"),
 ) -> dict[str, object]:
@@ -140,12 +252,28 @@ def calls(
 
 
 @app.get(
-    "/calls/{call_id}",
-    summary="Get call card with utterances and score",
+    _CALL_CARD_PATH,
+    summary="Get a full call card",
+    description="Returns utterances and aggregated QA scores for one processed call.",
     tags=["calls"],
     dependencies=[Depends(_verify_token)],
+    name="get_call_card",
+    operation_id="getCallCard",
+    response_model=CallCardResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Missing or invalid API token."},
+        404: {"model": ErrorResponse, "description": "Call was not found."},
+    },
 )
-def call_card(call_id: str) -> dict[str, object]:
+@app.get(
+    "/calls/{call_id}",
+    include_in_schema=False,
+    dependencies=[Depends(_verify_token)],
+    name="get_call_card_legacy",
+)
+def call_card(
+    call_id: str = PathParam(description="Processed call identifier.")
+) -> dict[str, object]:
     payload = _state.get_call_card.execute(call_id)
     if payload["score"] is None:
         raise CallNotFoundError(call_id)
@@ -153,24 +281,49 @@ def call_card(call_id: str) -> dict[str, object]:
 
 
 @app.post(
-    "/calls",
-    summary="Transcribe an audio file and create a new call resource",
+    _TRANSCRIPTIONS_PATH,
+    summary="Upload audio for transcription and QA scoring",
+    description=(
+        "Accepts an audio file, runs transcription and post-processing, persists the "
+        "result, and returns the location of the created call card."
+    ),
     status_code=201,
-    tags=["calls"],
+    tags=["analysis"],
     dependencies=[Depends(_verify_token)],
+    name="create_transcription",
+    operation_id="createTranscription",
+    response_model=TranscriptionCreatedResponse,
+    responses={
+        201: {
+            "description": "Audio file processed successfully. Call card resource created.",
+        },
+        401: {"model": ErrorResponse, "description": "Missing or invalid API token."},
+        422: {"model": ErrorResponse, "description": "Uploaded payload is invalid."},
+        500: {"model": ErrorResponse, "description": "Audio processing failed."},
+    },
+)
+@app.post(
+    "/calls",
+    include_in_schema=False,
+    status_code=201,
+    dependencies=[Depends(_verify_token)],
+    name="create_call_legacy",
 )
 async def create_call(
     request: Request,
-    file: UploadFile = File(..., description="Audio file (wav / mp3 / flac)"),
+    file: UploadFile = File(
+        ...,
+        description="Audio file to process. Supported formats depend on the ASR backend.",
+    ),
     call_id: str | None = Form(
         default=None,
-        description="Optional call ID; defaults to the uploaded filename stem",
+        description="Optional call identifier. Defaults to the uploaded filename stem.",
     ),
 ) -> Response:
     """Upload an audio file, transcribe it, classify emotions and persist the
-    result.  Returns **201 Created** with a ``Location`` header pointing to the
-    new call resource (``GET /calls/{call_id}``) and a minimal JSON body so
-    clients can follow up without an extra round-trip."""
+    result. Returns **201 Created** with a ``Location`` header pointing to the
+    call card resource and a minimal JSON body so clients can follow up without
+    an extra round-trip."""
     original_name = file.filename or "audio.wav"
     suffix = Path(original_name).suffix or ".wav"
     stem = call_id or Path(original_name).stem
@@ -193,7 +346,7 @@ async def create_call(
             logger.exception("Transcription failed for call_id=%s", stem)
             raise HTTPException(status_code=500, detail=f"Transcription error: {exc}") from exc
 
-    location = str(request.url_for("call_card", call_id=processed_id))
+    location = str(request.url_for("get_call_card", call_id=processed_id))
     body = JSONResponse(
         content={"call_id": processed_id, "location": location},
         status_code=201,

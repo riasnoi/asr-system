@@ -1,6 +1,7 @@
 """Integration tests for the FastAPI online service."""
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +9,11 @@ from fastapi.testclient import TestClient
 from asr_system.domain.entities import CallScore, Utterance
 from asr_system.domain.value_objects import Emotion
 from asr_system.interfaces.online.api import _state, app
+
+
+class _StubProcessCallUseCase:
+    def execute(self, audio_path: str) -> str:
+        return Path(audio_path).stem
 
 
 @pytest.fixture(autouse=True)
@@ -25,6 +31,7 @@ def _setup_state(tmp_path):
         utterances_repo=_state.utterances_repo, scores_repo=_state.scores_repo
     )
     _state.list_calls = ListCallsUseCase(scores_repo=_state.scores_repo)
+    _state.process_call = _StubProcessCallUseCase()
 
 
 @pytest.fixture()
@@ -53,7 +60,7 @@ def test_health(client) -> None:
 
 
 def test_calls_empty(client) -> None:
-    resp = client.get("/calls")
+    resp = client.get("/api/v1/call-summaries")
     assert resp.status_code == 200
     data = resp.json()
     assert data["items"] == []
@@ -64,7 +71,7 @@ def test_calls_with_data(client) -> None:
     _seed_call("c1", 0.5, 0.3)
     _seed_call("c2", 0.9, 0.1)
 
-    resp = client.get("/calls?min_negative_index=0.0")
+    resp = client.get("/api/v1/call-summaries?min_negative_index=0.0")
     assert resp.status_code == 200
     assert resp.json()["total"] == 2
 
@@ -73,7 +80,7 @@ def test_calls_pagination(client) -> None:
     for i in range(5):
         _seed_call(f"call-{i}", 0.5, 0.5)
 
-    resp = client.get("/calls?offset=2&limit=2")
+    resp = client.get("/api/v1/call-summaries?offset=2&limit=2")
     data = resp.json()
     assert len(data["items"]) == 2
     assert data["total"] == 5
@@ -82,15 +89,35 @@ def test_calls_pagination(client) -> None:
 
 def test_call_card_found(client) -> None:
     _seed_call("c1")
-    resp = client.get("/calls/c1")
+    resp = client.get("/api/v1/call-cards/c1")
     assert resp.status_code == 200
     assert resp.json()["call_id"] == "c1"
     assert resp.json()["score"] is not None
 
 
 def test_call_card_not_found(client) -> None:
-    resp = client.get("/calls/nonexistent")
+    resp = client.get("/api/v1/call-cards/nonexistent")
     assert resp.status_code == 404
+
+
+def test_transcriptions_create_processed_call(client) -> None:
+    resp = client.post(
+        "/api/v1/transcriptions",
+        files={"file": ("sample.wav", b"fake-audio", "audio/wav")},
+        data={"call_id": "demo-call"},
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["call_id"] == "demo-call"
+    assert resp.headers["Location"].endswith("/api/v1/call-cards/demo-call")
+    assert resp.json()["location"].endswith("/api/v1/call-cards/demo-call")
+
+
+def test_legacy_routes_still_work(client) -> None:
+    _seed_call("legacy-call")
+
+    assert client.get("/calls").status_code == 200
+    assert client.get("/calls/legacy-call").status_code == 200
 
 
 def test_auth_required_when_token_set(client, monkeypatch) -> None:
@@ -99,10 +126,10 @@ def test_auth_required_when_token_set(client, monkeypatch) -> None:
 
     get_settings.cache_clear()
 
-    resp = client.get("/calls")
+    resp = client.get("/api/v1/call-summaries")
     assert resp.status_code == 401
 
-    resp = client.get("/calls", headers={"X-API-Token": "secret-tok"})
+    resp = client.get("/api/v1/call-summaries", headers={"X-API-Token": "secret-tok"})
     assert resp.status_code == 200
 
     monkeypatch.delenv("ONLINE_API_TOKEN", raising=False)

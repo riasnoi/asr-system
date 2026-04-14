@@ -228,6 +228,11 @@ let currentPage = 0;
 const PAGE_SIZE = 20;
 let totalCalls = 0;
 let selectedCallId = null;
+const API = {
+  callSummaries: '/api/v1/call-summaries',
+  transcriptions: '/api/v1/transcriptions',
+  callCard: callId => `/api/v1/call-cards/${encodeURIComponent(callId)}`
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function token() { return document.getElementById('api-token').value.trim(); }
@@ -335,8 +340,8 @@ async function submitTranscribe() {
   document.getElementById('progress-text').textContent = 'Загрузка и транскрибация…';
 
   try {
-    // POST /calls → 201 Created + Location header
-    const created = await fetch('/calls', {
+    // POST /api/v1/transcriptions → 201 Created + Location header
+    const created = await fetch(API.transcriptions, {
       method: 'POST',
       headers: headers(),
       body: formData
@@ -348,7 +353,7 @@ async function submitTranscribe() {
     const { location } = await created.json();
     document.getElementById('progress-text').textContent = 'Загрузка результата…';
 
-    // GET /calls/{id} — получаем полную карточку по Location
+    // GET /api/v1/call-cards/{id} — получаем полную карточку по Location
     const cardResp = await fetch(location, { headers: headers() });
     if (!cardResp.ok) {
       const err = await cardResp.json().catch(() => ({ detail: cardResp.statusText }));
@@ -423,7 +428,7 @@ async function loadCalls() {
 
   try {
     const resp = await fetch(
-      `/calls?min_negative_index=${minNeg}&offset=${offset}&limit=${PAGE_SIZE}`,
+      `${API.callSummaries}?min_negative_index=${minNeg}&offset=${offset}&limit=${PAGE_SIZE}`,
       { headers: headers() }
     );
     if (!resp.ok) throw new Error(resp.statusText);
@@ -484,7 +489,7 @@ async function openCall(callId, el) {
   document.getElementById('result-card').classList.add('d-none');
 
   try {
-    const resp = await fetch(`/calls/${encodeURIComponent(callId)}`, { headers: headers() });
+    const resp = await fetch(API.callCard(callId), { headers: headers() });
     if (!resp.ok) throw new Error(resp.statusText);
     const data = await resp.json();
     renderResult(data);

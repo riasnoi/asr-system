@@ -53,8 +53,11 @@ asr-system/
 ## API online-сервиса (MVP)
 
 - `GET /health` - healthcheck.
-- `GET /calls?min_negative_index=0.5` - список звонков по порогу индекса.
-- `GET /calls/{call_id}` - карточка звонка (реплики + индексы).
+- `GET /api/v1/call-summaries?min_negative_index=0.5` - список звонков по порогу индекса.
+- `GET /api/v1/call-cards/{call_id}` - карточка звонка (реплики + индексы).
+- `POST /api/v1/transcriptions` - загрузка аудиофайла и запуск обработки звонка.
+
+Старые маршруты `/calls`, `/calls/{call_id}` и `POST /calls` сохранены как legacy-алиасы для обратной совместимости, но больше не являются основным публичным контрактом.
 
 ## Воспроизводимость
 

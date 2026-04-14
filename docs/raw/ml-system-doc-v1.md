@@ -637,7 +637,7 @@ flowchart TD
     
     - таблица/витрина (SQL),
         
-    - API: `GET /calls/{id}`, `GET /calls?date=...&negativity>...`.
+    - API: `GET /api/v1/call-cards/{id}`, `GET /api/v1/call-summaries?date=...&negativity>...`.
         
 - (Опционально) интеграция с CRM/QA системой: прикрепление ссылки на “карточку звонка”.
     

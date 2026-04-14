@@ -84,7 +84,11 @@ class Settings(BaseSettings):
 
 def _apply_vault_overrides() -> dict[str, dict[str, str]]:
     """Load secrets from Vault if VAULT_ENABLED=true, otherwise return empty."""
-    from asr_system.infrastructure.secrets.vault_provider import VaultSettings
+    try:
+        from asr_system.infrastructure.secrets.vault_provider import VaultSettings
+    except ModuleNotFoundError:
+        logger.warning("Vault provider dependencies are not installed; skipping Vault overrides")
+        return {}
 
     vault_cfg = VaultSettings()
     if not vault_cfg.enabled:
