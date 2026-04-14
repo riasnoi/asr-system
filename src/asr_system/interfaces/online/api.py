@@ -6,8 +6,9 @@ import re
 import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib import import_module
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException
 from fastapi import Path as PathParam
@@ -16,11 +17,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
-
-try:
-    from prometheus_fastapi_instrumentator import Instrumentator
-except ModuleNotFoundError:  # pragma: no cover - optional in lightweight dev/test envs
-    Instrumentator = None
 
 from asr_system.application.use_cases.get_call_card import GetCallCardUseCase
 from asr_system.application.use_cases.list_calls import ListCallsUseCase
@@ -117,6 +113,14 @@ class TranscriptionCreatedResponse(BaseModel):
     location: str = Field(description="Absolute URL of the created call card resource.")
 
 
+def _load_prometheus_instrumentator() -> Any | None:
+    try:
+        module = import_module("prometheus_fastapi_instrumentator")
+    except ModuleNotFoundError:  # pragma: no cover - optional in lightweight dev/test envs
+        return None
+    return module.Instrumentator
+
+
 def _verify_token(token: Annotated[str | None, Security(_api_key_header)]) -> None:
     expected = get_settings().online_secrets.api_token
     if not expected:
@@ -178,8 +182,10 @@ app.add_middleware(
     allow_headers=["X-API-Token", "Content-Type"],
 )
 
-if Instrumentator is not None:
-    Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["ops"])
+instrumentator_class = _load_prometheus_instrumentator()
+
+if instrumentator_class is not None:
+    instrumentator_class().instrument(app).expose(app, endpoint="/metrics", tags=["ops"])
 else:
     logger.warning("Prometheus instrumentator is not installed; /metrics endpoint is disabled")
 
